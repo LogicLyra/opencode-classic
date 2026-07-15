@@ -1,11 +1,19 @@
 #!/usr/bin/env bun
 import { $ } from "bun"
 import pkg from "../package.json"
-import { Script } from "@opencode-ai/script"
 import { fileURLToPath } from "url"
 
 const dir = fileURLToPath(new URL("..", import.meta.url))
 process.chdir(dir)
+
+const fork = "LogicLyra/opencode-classic"
+const remotes = await $`git remote -v`.nothrow()
+const remoteText = remotes.exitCode === 0 ? remotes.stdout.toString() : ""
+if (process.env.GITHUB_REPOSITORY === fork || process.env.GH_REPO === fork || remoteText.includes(fork)) {
+  throw new Error("Upstream package publishing is disabled in OpenCode Classic; use release-classic.yml")
+}
+
+const { Script } = await import("@opencode-ai/script")
 
 async function published(name: string, version: string) {
   return (await $`npm view ${name}@${version} version`.nothrow()).exitCode === 0

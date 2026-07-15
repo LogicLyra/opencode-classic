@@ -17,30 +17,34 @@ import { authorizationLayer } from "../../src/server/routes/instance/httpapi/mid
 import { schemaErrorLayer } from "../../src/server/routes/instance/httpapi/middleware/schema-error"
 import { testEffect } from "../lib/effect"
 
-const apiLayer = HttpRouter.serve(
-  HttpApiBuilder.layer(RootHttpApi).pipe(
-    Layer.provide([controlHandlers, controlPlaneHandlers, globalHandlers]),
-    Layer.provide([authorizationLayer, schemaErrorLayer]),
-    // Raw HttpApi routes expose an opaque handler context at the request boundary.
-    // oxlint-disable-next-line typescript-eslint/no-unsafe-type-assertion
-    HttpRouter.provideRequest(Layer.succeedContext(Context.empty() as Context.Context<unknown>)),
-  ),
-  { disableListenLog: true, disableLogger: true },
-).pipe(
-  Layer.provideMerge(NodeHttpServer.layerTest),
-  Layer.provide(Layer.mock(Auth.Service)({})),
-  Layer.provide(Layer.mock(Config.Service)({})),
-  Layer.provide(Layer.mock(MoveSession.Service)({})),
-  Layer.provide(
-    Layer.mock(Installation.Service)({
-      method: () => Effect.succeed("npm"),
-      latest: () => Effect.succeed("9.9.9"),
-      upgrade: () => Effect.void,
-    }),
-  ),
-  Layer.provide(ServerAuth.Config.configLayer({ password: Option.none(), username: "opencode" })),
-)
-const it = testEffect(apiLayer)
+function apiLayer(method: Installation.Method) {
+  return HttpRouter.serve(
+    HttpApiBuilder.layer(RootHttpApi).pipe(
+      Layer.provide([controlHandlers, controlPlaneHandlers, globalHandlers]),
+      Layer.provide([authorizationLayer, schemaErrorLayer]),
+      // Raw HttpApi routes expose an opaque handler context at the request boundary.
+      // oxlint-disable-next-line typescript-eslint/no-unsafe-type-assertion
+      HttpRouter.provideRequest(Layer.succeedContext(Context.empty() as Context.Context<unknown>)),
+    ),
+    { disableListenLog: true, disableLogger: true },
+  ).pipe(
+    Layer.provideMerge(NodeHttpServer.layerTest),
+    Layer.provide(Layer.mock(Auth.Service)({})),
+    Layer.provide(Layer.mock(Config.Service)({})),
+    Layer.provide(Layer.mock(MoveSession.Service)({})),
+    Layer.provide(
+      Layer.mock(Installation.Service)({
+        method: () => Effect.succeed(method),
+        latest: () => Effect.succeed("9.9.9"),
+        upgrade: () => Effect.void,
+      }),
+    ),
+    Layer.provide(ServerAuth.Config.configLayer({ password: Option.none(), username: "opencode" })),
+  )
+}
+
+const it = testEffect(apiLayer("curl"))
+const external = testEffect(apiLayer("npm"))
 
 describe("global HttpApi", () => {
   it.live("upgrades to latest when the request body is omitted", () =>
@@ -61,6 +65,18 @@ describe("global HttpApi", () => {
 
       expect(response.status).toBe(400)
       expect(yield* response.json).toEqual({ success: false, error: "Invalid request body" })
+    }),
+  )
+
+  external.live("rejects upgrades managed by upstream package channels", () =>
+    Effect.gen(function* () {
+      const response = yield* HttpClient.post(GlobalPaths.upgrade)
+
+      expect(response.status).toBe(400)
+      expect(yield* response.json).toEqual({
+        success: false,
+        error: "OpenCode Classic updates use GitHub Releases; unsupported installation method: npm",
+      })
     }),
   )
 })

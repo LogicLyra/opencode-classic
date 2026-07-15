@@ -3,6 +3,7 @@ import { existsSync } from "node:fs"
 import { join } from "node:path"
 import * as pty from "@lydell/node-pty"
 import type { WslDistroProbe, WslInstalledDistro, WslOnlineDistro, WslRuntimeCheck } from "../../preload/types"
+import { DESKTOP_RELEASE_REPOSITORY } from "../../identity"
 import { wslTerminalArgs } from "./policy"
 
 export type WslCommandLine = {
@@ -262,13 +263,16 @@ export async function installWslDistro(name: string, opts?: RunWslOptions) {
 export async function installWslOpencode(version: string, distro: string, opts?: RunWslOptions) {
   return runInteractiveCommand(
     resolveSystem32Command("wsl.exe"),
-    wslArgs(
-      ["bash", "-lc", `curl -fsSL https://opencode.ai/install | bash -s -- --version ${shellEscape(version)}`],
-      distro,
-    ),
+    wslArgs(["bash", "-lc", wslInstallCommand(version)], distro),
     withTimeout(opts, DEFAULT_WSL_INSTALL_TIMEOUT_MS),
     DEFAULT_WSL_INSTALL_TIMEOUT_MS,
   )
+}
+
+export function wslInstallCommand(version: string) {
+  const target = version.replace(/^v/, "")
+  const installer = `https://github.com/${DESKTOP_RELEASE_REPOSITORY.owner}/${DESKTOP_RELEASE_REPOSITORY.repo}/releases/download/v${encodeURIComponent(target)}/install`
+  return `curl -fsSL ${shellEscape(installer)} | bash -s -- --version ${shellEscape(target)}`
 }
 
 export async function probeWslDistro(name: string, opts?: RunWslOptions): Promise<WslDistroProbe> {

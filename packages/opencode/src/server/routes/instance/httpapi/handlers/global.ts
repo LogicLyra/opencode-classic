@@ -96,13 +96,16 @@ export const globalHandlers = HttpApiBuilder.group(RootHttpApi, "global", (handl
 
     const upgrade = Effect.fn("GlobalHttpApi.upgrade")(function* (ctx: { payload: typeof GlobalUpgradeInput.Type }) {
       const method = yield* installation.method()
-      if (method === "unknown") {
+      if (method !== "curl") {
         return {
           status: 400,
-          body: { success: false as const, error: "Unknown installation method" },
+          body: {
+            success: false as const,
+            error: `OpenCode Classic updates use GitHub Releases; unsupported installation method: ${method}`,
+          },
         }
       }
-      const target = ctx.payload.target || (yield* installation.latest(method))
+      const target = (ctx.payload.target || (yield* installation.latest())).replace(/^v/, "")
       const result = yield* installation.upgrade(method, target).pipe(
         Effect.as({ status: 200, body: { success: true as const, version: target } }),
         Effect.catch((err) =>

@@ -2,12 +2,14 @@
   "name": "@opencode-ai/desktop",
   "private": true,
   "version": "1.18.0",
+  "description": "Classic desktop interface for the OpenCode coding agent",
   "type": "module",
   "license": "MIT",
-  "homepage": "https://opencode.ai",
+  "homepage": "https://github.com/LogicLyra/opencode-classic",
   "author": {
-    "name": "OpenCode",
-    "email": "hello@opencode.ai"
+    "name": "LogicLyra",
+    "email": "LogicLyra@users.noreply.github.com",
+    "url": "https://github.com/LogicLyra"
   },
   "scripts": {
     "typecheck": "tsgo -b",

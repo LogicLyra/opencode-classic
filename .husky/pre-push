@@ -1,5 +1,19 @@
 #!/bin/sh
 set -e
+
+case "${2:-}" in
+  https://github.com/LogicLyra/opencode-classic|https://github.com/LogicLyra/opencode-classic.git)
+    ;;
+  git@github.com:LogicLyra/opencode-classic|git@github.com:LogicLyra/opencode-classic.git)
+    ;;
+  ssh://git@github.com/LogicLyra/opencode-classic|ssh://git@github.com/LogicLyra/opencode-classic.git)
+    ;;
+  *)
+    echo "Push blocked: OpenCode Classic may only push to LogicLyra/opencode-classic." >&2
+    exit 1
+    ;;
+esac
+
 # Check if bun version matches package.json
 # keep in sync with packages/script/src/index.ts semver qualifier
 bun -e '

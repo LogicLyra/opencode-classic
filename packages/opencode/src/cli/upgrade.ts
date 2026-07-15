@@ -9,7 +9,7 @@ export async function upgrade() {
   const config = await AppRuntime.runPromise(Config.Service.use((cfg) => cfg.getGlobal()))
   if (config.autoupdate === false || Flag.OPENCODE_DISABLE_AUTOUPDATE) return
   const method = await Installation.method()
-  const latest = await Installation.latest(method).catch(() => {})
+  const latest = await Installation.latest().catch(() => {})
   if (!latest) return
 
   if (Flag.OPENCODE_ALWAYS_NOTIFY_UPDATE) {
@@ -23,11 +23,11 @@ export async function upgrade() {
     return
   }
 
-  if (InstallationVersion === latest) return
+  if (!Installation.isUpdateAvailable(InstallationVersion, latest)) return
 
   const kind = Installation.getReleaseType(InstallationVersion, latest)
 
-  if (config.autoupdate === "notify" || kind !== "patch") {
+  if (config.autoupdate === "notify" || kind !== "patch" || method !== "curl") {
     GlobalBus.emit("event", {
       directory: "global",
       payload: {
@@ -38,7 +38,6 @@ export async function upgrade() {
     return
   }
 
-  if (method === "unknown") return
   await Installation.upgrade(method, latest)
     .then(() =>
       GlobalBus.emit("event", {

@@ -4,16 +4,12 @@ import { fileURLToPath } from "node:url"
 import { promisify } from "node:util"
 
 import type { Configuration } from "electron-builder"
+import { DESKTOP_IDENTITIES, DESKTOP_PACKAGE_NAME, DESKTOP_PROTOCOL, DESKTOP_RELEASE_REPOSITORY } from "./src/identity"
 
 const execFileAsync = promisify(execFile)
 const packageDir = path.dirname(fileURLToPath(import.meta.url))
 const rootDir = path.resolve(packageDir, "../..")
 const signScript = path.join(rootDir, "script", "sign-windows.ps1")
-// The Electron 42 packaging update briefly installed Linux launchers/icons under
-// "opencode-desktop". Keep that hidden desktop entry around so existing GNOME/KDE
-// pins still resolve after the canonical app id changes back to ai.opencode.desktop.
-const legacyDesktopEntry = path.join(packageDir, "resources", "linux", "opencode-desktop.desktop")
-const legacyDesktopEntryFpm = `${legacyDesktopEntry}=/usr/share/applications/opencode-desktop.desktop`
 
 async function signWindows(configuration: { path: string }) {
   if (process.platform !== "win32") return
@@ -32,25 +28,19 @@ const channel = (() => {
   return "dev"
 })()
 
-const APP_IDS = {
-  dev: "ai.opencode.desktop.dev",
-  beta: "ai.opencode.desktop.beta",
-  prod: "ai.opencode.desktop",
-} as const
-
-const getBase = (appId: string): Configuration => ({
-  artifactName: "opencode-desktop-${os}-${arch}.${ext}",
+const getBase = (identity: (typeof DESKTOP_IDENTITIES)[keyof typeof DESKTOP_IDENTITIES]): Configuration => ({
+  artifactName: "opencode-classic-desktop-${os}-${arch}.${ext}",
   directories: {
     output: "dist",
     buildResources: "resources",
   },
   // Linux launchers are .desktop files, so this is the desktop file name,
-  // not just the app id. For prod, app id "ai.opencode.desktop" becomes
-  // "ai.opencode.desktop.desktop".
+  // not just the app id.
   // https://developer.gnome.org/documentation/guidelines/maintainer/integrating.html
   // https://www.electron.build/docs/linux/
   extraMetadata: {
-    desktopName: `${appId}.desktop`,
+    name: DESKTOP_PACKAGE_NAME,
+    desktopName: `${identity.appId}.desktop`,
   },
   files: ["out/**/*", "resources/**/*"],
   extraResources: [
@@ -74,8 +64,8 @@ const getBase = (appId: string): Configuration => ({
     sign: true,
   },
   protocols: {
-    name: "OpenCode",
-    schemes: ["opencode"],
+    name: identity.productName,
+    schemes: [DESKTOP_PROTOCOL],
   },
   win: {
     icon: `resources/icons/icon.ico`,
@@ -94,12 +84,12 @@ const getBase = (appId: string): Configuration => ({
   linux: {
     icon: `resources/icons`,
     category: "Development",
-    executableName: appId,
+    executableName: identity.appId,
     desktop: {
       entry: {
         // Match the installed .desktop file and hicolor icon basename so
         // Linux shells can associate the running Electron window with its launcher.
-        StartupWMClass: appId,
+        StartupWMClass: identity.appId,
       },
     },
     target: ["AppImage", "deb", "rpm"],
@@ -107,40 +97,40 @@ const getBase = (appId: string): Configuration => ({
 })
 
 function getConfig() {
-  const appId = APP_IDS[channel]
-  const base = getBase(appId)
+  const identity = DESKTOP_IDENTITIES[channel]
+  const base = getBase(identity)
 
   switch (channel) {
     case "dev": {
       return {
         ...base,
-        appId,
-        productName: "OpenCode Dev",
-        rpm: { packageName: "opencode-dev" },
+        appId: identity.appId,
+        productName: identity.productName,
+        deb: { packageName: identity.packageName },
+        rpm: { packageName: identity.packageName },
       }
     }
     case "beta": {
       return {
         ...base,
-        appId,
-        productName: "OpenCode Beta",
-        protocols: { name: "OpenCode Beta", schemes: ["opencode"] },
-        publish: { provider: "github", owner: "anomalyco", repo: "opencode-beta", channel: "latest" },
-        rpm: { packageName: "opencode-beta" },
+        appId: identity.appId,
+        productName: identity.productName,
+        deb: { packageName: identity.packageName },
+        rpm: { packageName: identity.packageName },
       }
     }
     case "prod": {
       return {
         ...base,
-        appId,
-        productName: "OpenCode",
-        protocols: { name: "OpenCode", schemes: ["opencode"] },
-        publish: { provider: "github", owner: "anomalyco", repo: "opencode", channel: "latest" },
-        deb: { fpm: [legacyDesktopEntryFpm] },
-        rpm: { packageName: "opencode", fpm: [legacyDesktopEntryFpm] },
+        appId: identity.appId,
+        productName: identity.productName,
+        publish: { provider: "github", ...DESKTOP_RELEASE_REPOSITORY, channel: "latest" },
+        deb: { packageName: identity.packageName },
+        rpm: { packageName: identity.packageName },
       }
     }
   }
+  throw new Error("Unsupported desktop channel")
 }
 
 export default getConfig()

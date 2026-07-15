@@ -5,6 +5,7 @@ import { homedir } from "node:os"
 import { join } from "node:path"
 import { CHANNEL } from "./constants"
 import { getStore } from "./store"
+import { DESKTOP_IDENTITIES } from "../identity"
 
 const TAURI_MIGRATED_KEY = "tauriMigrated"
 
@@ -21,14 +22,8 @@ function tauriDir(id: string) {
   }
 }
 
-// The Tauri app identifier changes between dev/beta/prod builds.
-const TAURI_APP_IDS: Record<string, string> = {
-  dev: "ai.opencode.desktop.dev",
-  beta: "ai.opencode.desktop.beta",
-  prod: "ai.opencode.desktop",
-}
 function tauriAppId() {
-  return app.isPackaged ? TAURI_APP_IDS[CHANNEL] : "ai.opencode.desktop.dev"
+  return DESKTOP_IDENTITIES[app.isPackaged ? CHANNEL : "dev"].appId
 }
 
 // Migrate a single Tauri .dat file into the corresponding electron-store.
