@@ -232,7 +232,7 @@ fi
 
 git -C "$root" status --porcelain=v1 > "$evidence/git-status-after.txt"
 cmp "$baseline" "$evidence/git-status-after.txt"
-sha256sum "$evidence"/*.log "$evidence"/*.txt > "$evidence/evidence.sha256"
 if [[ -z ${CI_TMPDIR:-} ]]; then rm -rf -- "$tmp"; fi
 printf 'result=PASS\n' | tee -a "$summary"
+sha256sum "$evidence"/*.log "$evidence"/*.txt > "$evidence/evidence.sha256"
 trap - EXIT
