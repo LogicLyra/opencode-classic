@@ -88,7 +88,8 @@ function LimitsGraph(props: { href: string }) {
   const log = (n: number) => Math.log10(Math.max(n, 1))
   const base = 24
   const p = 2.2
-  const x = (r: number) => left + base + Math.pow(log(r) / log(rmax), p) * (plot - base)
+  const x = (r: number) =>
+    left + (r <= 1 ? base * Math.max(0, r) : base + Math.pow(log(r) / log(rmax), p) * (plot - base))
   const ticks = [1, 5, 10, 25, 50, 100].filter((t) => t <= rmax)
   const labels = (() => {
     const set = new Set<number>()
