@@ -1,7 +1,7 @@
 import { Flag } from "@opencode-ai/core/flag/flag"
 import { ConfigV1 } from "@opencode-ai/core/v1/config/config"
 import { SessionV1 } from "@opencode-ai/core/v1/session"
-import { Cause, Duration, Effect, Layer, Scope } from "effect"
+import { Cause, Duration, Effect, Layer, Queue, Scope } from "effect"
 import { TestLLMServer } from "../../lib/llm-server"
 import type { Config } from "../../../src/config/config"
 
@@ -13,6 +13,7 @@ import { runtime } from "./runtime"
 import type { ActiveScenario, Options, ProjectOptions, Result, Scenario, ScenarioContext, SeededContext } from "./types"
 import { ProviderV2 } from "@opencode-ai/core/provider"
 import { ModelV2 } from "@opencode-ai/core/model"
+import type { GlobalEvent } from "../../../src/bus/global"
 
 export function runScenario(options: Options) {
   return (scenario: Scenario) => {
@@ -123,6 +124,28 @@ function withContext<A, E>(
           if (!context.llm) throw new Error("scenario needs fake LLM")
           return context.llm
         }
+        const worktreeReady = () =>
+          Effect.gen(function* () {
+            const events = yield* Queue.unbounded<GlobalEvent>()
+            const on = (event: GlobalEvent) => {
+              if (event.payload.type === modules.Worktree.Event.Ready.type) Queue.offerUnsafe(events, event)
+            }
+            modules.GlobalBus.on("event", on)
+            return (directory: string) =>
+              Effect.gen(function* () {
+                while (true) {
+                  const event = yield* Queue.take(events)
+                  if (event.directory === directory) return
+                }
+              }).pipe(
+                Effect.timeoutOrElse({
+                  duration: "10 seconds",
+                  orElse: () => Effect.fail(new Error(`timed out waiting for worktree.ready: ${directory}`)),
+                }),
+                Effect.ensuring(Effect.sync(() => modules.GlobalBus.off("event", on))),
+                Effect.orDie,
+              )
+          })
         const base: ScenarioContext = {
           directory: context.dir?.path,
           headers: (extra) => ({
@@ -177,7 +200,14 @@ function withContext<A, E>(
           messages: (sessionID) =>
             run(modules.Session.Service.use((svc) => svc.messages({ sessionID }).pipe(Effect.orDie))),
           todos: (sessionID, todos) => run(modules.Todo.Service.use((svc) => svc.update({ sessionID, todos }))),
-          worktree: (input) => run(modules.Worktree.Service.use((svc) => svc.create(input).pipe(Effect.orDie))),
+          worktree: (input) =>
+            Effect.gen(function* () {
+              const ready = yield* worktreeReady()
+              const info = yield* run(modules.Worktree.Service.use((svc) => svc.create(input).pipe(Effect.orDie)))
+              yield* ready(info.directory)
+              return info
+            }),
+          worktreeReady,
           worktreeRemove: (directory) =>
             run(modules.Worktree.Service.use((svc) => svc.remove({ directory })).pipe(Effect.ignore)),
           llmText: (value) => Effect.suspend(() => llm().text(value)),
@@ -256,12 +286,12 @@ function fakeLlmConfig(url: string): Partial<ConfigV1.Info> {
   }
 }
 
-const resetState = Effect.promise(async () => {
-  const modules = await runtime()
+const resetState = Effect.gen(function* () {
+  const modules = yield* Effect.promise(() => runtime())
   Flag.OPENCODE_SERVER_PASSWORD = original.OPENCODE_SERVER_PASSWORD
   Flag.OPENCODE_SERVER_USERNAME = original.OPENCODE_SERVER_USERNAME
-  await disposeApps()
-  await modules.disposeAllInstances()
-  await modules.resetDatabase()
-  await Bun.sleep(25)
+  yield* Effect.promise(() => disposeApps())
+  yield* Effect.promise(() => modules.disposeAllInstances())
+  yield* Effect.promise(() => modules.resetDatabase())
+  yield* Effect.promise(() => Bun.sleep(25))
 })

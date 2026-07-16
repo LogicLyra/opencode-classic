@@ -5,13 +5,13 @@ import { redirect } from "@solidjs/router"
 import { Actor } from "@opencode-ai/console-core/actor.js"
 
 import { createClient } from "@openauthjs/openauth/client"
+import { getContext, setContext, useSession } from "@solidjs/start/http"
 
 export const AuthClient = createClient({
   clientID: "app",
   issuer: import.meta.env.VITE_AUTH_URL,
 })
 
-import { useSession } from "@solidjs/start/http"
 import { Resource } from "@opencode-ai/console-resource"
 
 export interface AuthSession {
@@ -41,8 +41,9 @@ export const getActor = async (workspace?: string): Promise<Actor.Info> => {
   "use server"
   const evt = getRequestEvent()
   if (!evt) throw new Error("No request event")
-  if (evt.locals.actor) return evt.locals.actor
-  evt.locals.actor = (async () => {
+  const existing = getContext("actor") as Promise<Actor.Info> | undefined
+  if (existing) return existing
+  const actor = (async (): Promise<Actor.Info> => {
     const auth = await useAuthSession()
     if (!workspace) {
       const account = auth.data.account ?? {}
@@ -92,7 +93,7 @@ export const getActor = async (workspace?: string): Promise<Actor.Info> => {
           .execute()
           .then((x) => x[0]),
       )
-      if (user) {
+      if (user?.accountID) {
         await Database.use((tx) =>
           tx
             .update(UserTable)
@@ -112,5 +113,6 @@ export const getActor = async (workspace?: string): Promise<Actor.Info> => {
     }
     throw redirect("/auth/authorize")
   })()
-  return evt.locals.actor
+  setContext("actor", actor)
+  return actor
 }

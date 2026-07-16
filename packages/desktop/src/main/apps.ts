@@ -4,21 +4,34 @@ import { dirname, extname, join } from "node:path"
 import util from "node:util"
 
 const execFilePromise = util.promisify(execFile)
+const linuxAppNames = new Set(["code", "cursor", "zed", "subl"])
 
 const exists = (path: string) =>
   access(path)
     .then(() => true)
     .catch(() => false)
 
-export function checkAppExists(appName: string) {
+export async function checkAppExists(appName: string) {
   if (process.platform === "win32") return true
-  if (process.platform === "linux") return true
+  if (process.platform === "linux") return Boolean(await resolveLinuxAppPath(appName))
   return checkMacosApp(appName)
 }
 
 export function resolveAppPath(appName: string) {
-  if (process.platform !== "win32") return appName
+  if (process.platform === "linux") return resolveLinuxAppPath(appName)
+  if (process.platform !== "win32") return Promise.resolve(appName)
   return resolveWindowsAppPath(appName)
+}
+
+export function isAllowedLinuxAppName(appName: string) {
+  return linuxAppNames.has(appName)
+}
+
+async function resolveLinuxAppPath(appName: string) {
+  if (!isAllowedLinuxAppName(appName)) return null
+  return execFilePromise("which", [appName])
+    .then((result) => result.stdout.toString().split(/\r?\n/)[0]?.trim() || null)
+    .catch(() => null)
 }
 
 async function checkMacosApp(appName: string) {

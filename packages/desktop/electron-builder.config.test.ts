@@ -11,6 +11,11 @@ for (const channel of channels) {
 
     const module = await import(`./electron-builder.config.ts?channel=${channel}`)
     const config = module.default as Configuration
+    const viteModule = await import(`./electron.vite.config.ts?channel=${channel}`)
+    const vite = viteModule.default as {
+      main: { define?: Record<string, string> }
+      renderer: { define?: Record<string, string> }
+    }
 
     if (previous === undefined) delete process.env.OPENCODE_CHANNEL
     else process.env.OPENCODE_CHANNEL = previous
@@ -22,9 +27,17 @@ for (const channel of channels) {
     expect(config.extraMetadata?.desktopName).toBe(`${identity.appId}.desktop`)
     expect(config.linux?.executableName).toBe(identity.appId)
     expect(config.linux?.desktop?.entry?.StartupWMClass).toBe(identity.appId)
+    expect(config.linux?.target).toEqual(["deb", "rpm"])
     expect(config.protocols).toEqual({ name: identity.productName, schemes: [DESKTOP_PROTOCOL] })
     expect(config.deb?.packageName).toBe(identity.packageName)
     expect(config.rpm?.packageName).toBe(identity.packageName)
+    expect(config.extraResources).toContainEqual({
+      from: "resources/icons/",
+      to: "icons/",
+      filter: ["**/*"],
+    })
+    expect(vite.main.define?.["import.meta.env.OPENCODE_CHANNEL"]).toBe(JSON.stringify(channel))
+    expect(vite.renderer.define?.["import.meta.env.OPENCODE_CHANNEL"]).toBe(JSON.stringify(channel))
 
     if (channel === "prod") {
       expect(config.publish).toEqual({ provider: "github", ...DESKTOP_RELEASE_REPOSITORY, channel: "latest" })

@@ -10,6 +10,7 @@ import { AppProcess } from "@opencode-ai/core/process"
 import path from "path"
 import { makeRuntime } from "@opencode-ai/core/effect/runtime"
 import semver from "semver"
+import { createHash } from "node:crypto"
 import { InstallationChannel, InstallationVersion } from "@opencode-ai/core/installation/version"
 import { InstallationEvent } from "@opencode-ai/schema/installation-event"
 
@@ -67,6 +68,15 @@ export class UpgradeFailedError extends Schema.TaggedErrorClass<UpgradeFailedErr
 
 const GitHubRelease = Schema.Struct({ tag_name: Schema.String })
 
+export function releaseAssetChecksumMatches(checksums: string, name: string, body: string) {
+  const expected = checksums
+    .split(/\r?\n/)
+    .map((line) => line.trim().split(/\s+/, 2))
+    .find((entry) => entry[1]?.replace(/^\*/, "") === name)?.[0]
+  if (!expected || !/^[a-f0-9]{64}$/i.test(expected)) return false
+  return createHash("sha256").update(body).digest("hex").toLowerCase() === expected.toLowerCase()
+}
+
 export interface Interface {
   readonly info: () => Effect.Effect<Info>
   readonly method: () => Effect.Effect<Method>
@@ -118,6 +128,16 @@ const layer: Layer.Layer<Service, never, HttpClient.HttpClient | AppProcess.Serv
           ),
         )
         const body = yield* response.text
+        const checksums = yield* httpOk
+          .execute(
+            HttpClientRequest.get(
+              `https://github.com/${RELEASE_REPOSITORY}/releases/download/v${encodeURIComponent(target)}/SHA256SUMS`,
+            ),
+          )
+          .pipe(Effect.flatMap((response) => response.text))
+        if (!releaseAssetChecksumMatches(checksums, "install", body)) {
+          return yield* new UpgradeFailedError({ stderr: "Upgrade failed: installer checksum verification failed." })
+        }
         const bodyBytes = new TextEncoder().encode(body)
         const shell = yield* upgradeScriptShell()
         const result = yield* appProcess.run(
@@ -133,7 +153,9 @@ const layer: Layer.Layer<Service, never, HttpClient.HttpClient | AppProcess.Serv
           stderr: result.stderr.toString("utf8"),
         }
       },
-      Effect.mapError(() => new UpgradeFailedError({ stderr: upgradeFailure() })),
+      Effect.mapError((error) =>
+        error instanceof UpgradeFailedError ? error : new UpgradeFailedError({ stderr: upgradeFailure() }),
+      ),
     )
 
     const result: Interface = {

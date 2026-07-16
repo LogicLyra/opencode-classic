@@ -1,5 +1,5 @@
 import { action } from "@solidjs/router"
-import { getRequestEvent } from "solid-js/web"
+import { setContext } from "@solidjs/start/http"
 import { useAuthSession } from "~/context/auth"
 import { Dropdown } from "~/component/dropdown"
 import { useI18n } from "~/context/i18n"
@@ -9,14 +9,13 @@ import "./user-menu.css"
 const _logout = action(async () => {
   "use server"
   const auth = await useAuthSession()
-  const event = getRequestEvent()
   const current = auth.data.current
   if (current)
     await auth.update((val) => {
       delete val.account?.[current]
       const first = Object.keys(val.account ?? {})[0]
       val.current = first
-      event!.locals.actor = undefined
+      setContext("actor", undefined)
       return val
     })
 }, "auth.logout")

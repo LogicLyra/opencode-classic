@@ -8,6 +8,7 @@ import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process"
 import { Installation } from "../../src/installation"
 import { CrossSpawnSpawner } from "@opencode-ai/core/cross-spawn-spawner"
 import { testEffect } from "../lib/effect"
+import { createHash } from "node:crypto"
 
 const encoder = new TextEncoder()
 
@@ -48,6 +49,13 @@ function jsonResponse(body: unknown) {
     status: 200,
     headers: { "content-type": "application/json" },
   })
+}
+
+function releaseResponse(request: HttpClientRequest.HttpClientRequest, body = "install script") {
+  if (request.url.endsWith("/SHA256SUMS")) {
+    return new Response(`${createHash("sha256").update(body).digest("hex")}  install\n`, { status: 200 })
+  }
+  return new Response(body, { status: 200 })
 }
 
 function testLayer(
@@ -105,7 +113,7 @@ describe("installation", () => {
   describe("upgrade", () => {
     testEffect(
       testLayer(
-        () => new Response("install script", { status: 200 }),
+        (request) => releaseResponse(request),
         (cmd, args) =>
           cmd === "bash" && args[0] === "--version" ? "GNU bash" : { code: 1, stderr: "token=secret command output" },
       ),
@@ -125,7 +133,7 @@ describe("installation", () => {
       testLayer(
         (request) => {
           installerCalls.push(request.url)
-          return new Response("install script", { status: 200 })
+          return releaseResponse(request)
         },
         (cmd, args) => {
           if (cmd === "bash" && args[0] === "--version") return "GNU bash"
@@ -137,6 +145,7 @@ describe("installation", () => {
         yield* Installation.use.upgrade("curl", "v1.2.3")
         expect(installerCalls).toEqual([
           "https://github.com/LogicLyra/opencode-classic/releases/download/v1.2.3/install",
+          "https://github.com/LogicLyra/opencode-classic/releases/download/v1.2.3/SHA256SUMS",
         ])
       }),
     )
@@ -167,7 +176,7 @@ describe("installation", () => {
 
     testEffect(
       testLayer(
-        () => new Response("install script with token=secret", { status: 200 }),
+        (request) => releaseResponse(request, "install script with token=secret"),
         (cmd, args) => {
           if (cmd === "bash" && args[0] === "--version") return "GNU bash"
           if (cmd === "bash" || cmd === "sh") return { code: 1, stderr: "script output with token=secret" }
@@ -187,7 +196,7 @@ describe("installation", () => {
 
     testEffect(
       testLayer(
-        () => new Response("install script", { status: 200 }),
+        (request) => releaseResponse(request),
         (cmd, args) => {
           if (cmd === "bash" && args[0] === "--version") return { code: 1, stderr: "missing" }
           if (cmd === "bash") return { code: 1, stderr: "should not execute installer with bash" }
@@ -198,6 +207,26 @@ describe("installation", () => {
     ).effect("falls back to sh when bash is unavailable during curl upgrade", () =>
       Effect.gen(function* () {
         yield* Installation.use.upgrade("curl", "9.9.9")
+      }),
+    )
+
+    const checksumCommands: string[] = []
+    testEffect(
+      testLayer(
+        (request) =>
+          request.url.endsWith("/SHA256SUMS")
+            ? new Response(`${"0".repeat(64)}  install\n`, { status: 200 })
+            : new Response("install script", { status: 200 }),
+        (cmd) => {
+          checksumCommands.push(cmd)
+          return ""
+        },
+      ),
+    ).effect("rejects a fork installer whose checksum does not match", () =>
+      Effect.gen(function* () {
+        const error = yield* Effect.flip(Installation.use.upgrade("curl", "1.2.3"))
+        expect(error.stderr).toBe("Upgrade failed: installer checksum verification failed.")
+        expect(checksumCommands).toEqual([])
       }),
     )
   })

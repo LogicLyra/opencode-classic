@@ -1656,6 +1656,9 @@ export function LegacyHome() {
   return (
     <div class="mx-auto mt-55 w-full md:w-auto px-4">
       <Logo class="md:w-xl opacity-12" />
+      <Show when={platform.productName}>
+        <div class="mt-2 text-center text-12-medium tracking-wide text-text-weak">{platform.productName}</div>
+      </Show>
       <Button
         size="large"
         variant="ghost"

@@ -1,0 +1,70 @@
+name: publish-classic
+run-name: "publish OpenCode Classic v${{ inputs.version }}"
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Verified draft SemVer without a leading v"
+        required: true
+        type: string
+      sha:
+        description: "Approved main commit SHA"
+        required: true
+        type: string
+
+concurrency: publish-classic-${{ inputs.version }}
+
+permissions:
+  contents: write
+  attestations: read
+
+jobs:
+  publish:
+    if: github.repository == 'LogicLyra/opencode-classic' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    environment: classic-release
+    steps:
+      - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # v3.6.0
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          ref: main
+
+      - uses: ./.github/actions/setup-bun
+
+      - name: Validate approved draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+          APPROVED_SHA: ${{ inputs.sha }}
+        run: |
+          test "$GITHUB_SHA" = "$APPROVED_SHA"
+          test "$(git rev-parse origin/main)" = "$APPROVED_SHA"
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Version must be a stable SemVer without a leading v"
+            exit 1
+          fi
+          # shellcheck disable=SC2016
+          VERSION="$VERSION" bun -e 'for (const file of ["packages/opencode/package.json", "packages/desktop/package.json"]) { const pkg = await Bun.file(file).json(); if (pkg.version !== process.env.VERSION) throw new Error(`${file} is ${pkg.version}, expected ${process.env.VERSION}`) }'
+          draft=$(gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)
+          test "$draft" = true
+          test "$(git rev-list -n 1 "v$VERSION")" = "$APPROVED_SHA"
+
+      - name: Download and verify draft assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          install -d -m 0700 "$RUNNER_TEMP/release"
+          gh release download "v$VERSION" --repo "$GITHUB_REPOSITORY" --dir "$RUNNER_TEMP/release"
+          env -C "$RUNNER_TEMP/release" sha256sum -c SHA256SUMS
+          while IFS= read -r file; do
+            gh attestation verify "$file" --repo "$GITHUB_REPOSITORY"
+          done < <(find "$RUNNER_TEMP/release" -maxdepth 1 -type f -print)
+
+      - name: Publish verified draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+        run: gh release edit "v$VERSION" --repo "$GITHUB_REPOSITORY" --draft=false --latest

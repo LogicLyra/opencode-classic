@@ -6,6 +6,7 @@ import { getLogger } from "./logging"
 import { getUserShell, loadShellEnv } from "./shell-env"
 import { getStore } from "./store"
 import { DEFAULT_SERVER_URL_KEY } from "./store-keys"
+import { createIsolatedSidecarEnv } from "./sidecar-env"
 
 export type HealthCheck = { wait: Promise<void> }
 
@@ -61,7 +62,7 @@ export async function spawnLocalServer(
   const sidecar = join(dirname(fileURLToPath(import.meta.url)), "sidecar.js")
   const child = utilityProcess.fork(sidecar, [], {
     cwd: process.cwd(),
-    env: createSidecarEnv(),
+    env: createSidecarEnv(options.userDataPath),
     serviceName: SIDECAR_SERVICE_NAME,
     stdio: "pipe",
   })
@@ -207,12 +208,8 @@ export async function checkHealth(url: string, password?: string | null): Promis
   }
 }
 
-function createSidecarEnv(): Record<string, string> {
-  const env = Object.fromEntries(
-    Object.entries(process.env).flatMap(([key, value]) => (value === undefined ? [] : [[key, String(value)]])),
-  )
-  delete env.DEBUG
-  if (process.platform === "linux") delete env.LD_PRELOAD
+function createSidecarEnv(userDataPath: string): Record<string, string> {
+  const env = createIsolatedSidecarEnv(userDataPath)
   if (!app.isPackaged) env.OPENCODE_DISABLE_CHANNEL_DB = "1"
   return env
 }

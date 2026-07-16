@@ -8,21 +8,23 @@ on:
         description: "Stable SemVer without a leading v"
         required: true
         type: string
-      publish:
-        description: "Publish the verified draft release"
+      sha:
+        description: "Approved main commit SHA"
         required: true
-        default: false
-        type: boolean
+        type: string
 
 concurrency: release-classic-${{ inputs.version }}
 
 permissions:
   contents: write
+  id-token: write
+  attestations: write
 
 jobs:
   release:
-    if: github.repository == 'LogicLyra/opencode-classic'
+    if: github.repository == 'LogicLyra/opencode-classic' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
+    environment: release-draft
     steps:
       - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # v3.6.0
         with:
@@ -35,29 +37,29 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ inputs.version }}
+          APPROVED_SHA: ${{ inputs.sha }}
         run: |
+          test "$GITHUB_SHA" = "$APPROVED_SHA"
+          test "$(git rev-parse origin/main)" = "$APPROVED_SHA"
           if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
             echo "Version must be a stable SemVer without a leading v"
             exit 1
           fi
 
+          # shellcheck disable=SC2016
+          VERSION="$VERSION" bun -e 'for (const file of ["packages/opencode/package.json", "packages/desktop/package.json"]) { const pkg = await Bun.file(file).json(); if (pkg.version !== process.env.VERSION) throw new Error(`${file} is ${pkg.version}, expected ${process.env.VERSION}`) }'
+
           published=$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" --jq '.[] | select(.draft == false and .prerelease == false) | .tag_name')
+          # shellcheck disable=SC2016
           highest=$(RELEASE_TAGS="$published" bun -e 'import semver from "semver"; const versions = (process.env.RELEASE_TAGS ?? "").split(/\s+/).map((tag) => tag.replace(/^v/, "")).filter((version) => semver.valid(version)); process.stdout.write(versions.sort(semver.rcompare)[0] ?? "")')
           if [[ -n "$highest" ]]; then
+            # shellcheck disable=SC2016
             HIGHEST="$highest" bun -e 'import semver from "semver"; if (!semver.gt(process.env.VERSION, process.env.HIGHEST)) throw new Error(`${process.env.VERSION} must be newer than ${process.env.HIGHEST}`)'
           fi
 
           if gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            draft=$(gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)
-            if [[ "$draft" != "true" ]]; then
-              echo "Release v$VERSION is already published"
-              exit 1
-            fi
-            tag_sha=$(git rev-list -n 1 "v$VERSION")
-            if [[ "$tag_sha" != "$GITHUB_SHA" ]]; then
-              echo "Existing draft tag v$VERSION targets $tag_sha instead of $GITHUB_SHA"
-              exit 1
-            fi
+            echo "Release v$VERSION already exists; drafts are immutable and must be reviewed or deleted explicitly"
+            exit 1
           fi
 
       - name: Create draft release
@@ -80,14 +82,21 @@ jobs:
           GH_REPO: ${{ github.repository }}
           GH_TOKEN: ${{ github.token }}
           OPENCODE_RELEASE: "1"
+          OPENCODE_UPLOAD: "0"
           OPENCODE_VERSION: ${{ inputs.version }}
         run: bun run script/build.ts
+
+      - name: Upload CLI archives
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+        run: gh release upload "v$VERSION" packages/opencode/dist/*.zip packages/opencode/dist/*.tar.gz --repo "$GITHUB_REPOSITORY"
 
       - name: Upload release installer
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ inputs.version }}
-        run: gh release upload "v$VERSION" install --clobber --repo "$GITHUB_REPOSITORY"
+        run: gh release upload "v$VERSION" install --repo "$GITHUB_REPOSITORY"
 
       - name: Install Linux packaging tools
         run: |
@@ -122,12 +131,12 @@ jobs:
           VERSION: ${{ inputs.version }}
         run: |
           shopt -s nullglob
-          files=(packages/desktop/dist/*.{AppImage,deb,rpm,blockmap})
+          files=(packages/desktop/dist/*.{deb,rpm})
           if (( ${#files[@]} == 0 )); then
             echo "No Linux desktop assets found"
             exit 1
           fi
-          gh release upload "v$VERSION" "${files[@]}" --clobber --repo "$GITHUB_REPOSITORY"
+          gh release upload "v$VERSION" "${files[@]}" --repo "$GITHUB_REPOSITORY"
 
       - name: Verify and upload updater metadata
         env:
@@ -138,9 +147,48 @@ jobs:
           provider=packages/desktop/dist/linux-unpacked/resources/app-update.yml
           test -f "$metadata"
           test -f "$provider"
-          VERSION="$VERSION" bun -e 'const text = await Bun.file("packages/desktop/dist/latest-linux.yml").text(); if (!text.includes(`version: ${process.env.VERSION}`)) throw new Error("Updater metadata version mismatch"); if (!text.includes("opencode-classic-desktop-linux-x86_64")) throw new Error("Updater metadata does not reference OpenCode Classic assets")'
+          # shellcheck disable=SC2016
+          VERSION="$VERSION" bun -e 'const text = await Bun.file("packages/desktop/dist/latest-linux.yml").text(); if (!text.includes(`version: ${process.env.VERSION}`)) throw new Error("Updater metadata version mismatch"); for (const ext of [".deb", ".rpm"]) if (!text.includes(ext)) throw new Error(`Updater metadata does not reference ${ext}`); if (text.toLowerCase().includes("appimage")) throw new Error("Updater metadata unexpectedly references AppImage")'
+          # shellcheck disable=SC2016
           bun -e 'const text = await Bun.file("packages/desktop/dist/linux-unpacked/resources/app-update.yml").text(); for (const expected of ["owner: LogicLyra", "repo: opencode-classic", "updaterCacheDirName: opencode-classic-desktop-updater"]) if (!text.includes(expected)) throw new Error(`Missing updater provider setting: ${expected}`)'
-          gh release upload "v$VERSION" "$metadata" --clobber --repo "$GITHUB_REPOSITORY"
+          gh release upload "v$VERSION" "$metadata" --repo "$GITHUB_REPOSITORY"
+
+      - name: Generate and upload checksums
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          shopt -s nullglob
+          files=(
+            install
+            packages/opencode/dist/*.zip
+            packages/opencode/dist/*.tar.gz
+            packages/desktop/dist/*.deb
+            packages/desktop/dist/*.rpm
+            packages/desktop/dist/latest-linux.yml
+          )
+          if (( ${#files[@]} == 0 )); then
+            echo "No release files found for checksums"
+            exit 1
+          fi
+          : > SHA256SUMS
+          for file in "${files[@]}"; do
+            read -r hash _ < <(sha256sum "$file")
+            printf '%s  %s\n' "$hash" "$(basename "$file")" >> SHA256SUMS
+          done
+          gh release upload "v$VERSION" SHA256SUMS --repo "$GITHUB_REPOSITORY"
+
+      - name: Attest release provenance
+        uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4
+        with:
+          subject-path: |
+            install
+            SHA256SUMS
+            packages/opencode/dist/*.zip
+            packages/opencode/dist/*.tar.gz
+            packages/desktop/dist/*.deb
+            packages/desktop/dist/*.rpm
+            packages/desktop/dist/latest-linux.yml
 
       - name: Verify release assets
         env:
@@ -148,16 +196,9 @@ jobs:
           VERSION: ${{ inputs.version }}
         run: |
           assets=$(gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')
-          for required in install opencode-linux-x64.tar.gz opencode-linux-x64-baseline.tar.gz opencode-classic-desktop-linux-x86_64.AppImage opencode-classic-desktop-linux-amd64.deb opencode-classic-desktop-linux-x86_64.rpm latest-linux.yml; do
+          for required in install SHA256SUMS opencode-linux-x64.tar.gz opencode-linux-x64-baseline.tar.gz opencode-classic-desktop-linux-amd64.deb opencode-classic-desktop-linux-x86_64.rpm latest-linux.yml; do
             if ! grep -Fxq "$required" <<<"$assets"; then
               echo "Missing release asset: $required"
               exit 1
             fi
           done
-
-      - name: Publish verified release
-        if: inputs.publish
-        env:
-          GH_TOKEN: ${{ github.token }}
-          VERSION: ${{ inputs.version }}
-        run: gh release edit "v$VERSION" --repo "$GITHUB_REPOSITORY" --draft=false --latest

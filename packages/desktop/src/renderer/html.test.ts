@@ -38,6 +38,11 @@ describe("electron renderer html", () => {
         const content = await html(name)
         expect(content).not.toContain('rel="manifest"')
       })
+
+      test("uses the OpenCode Classic product title", async () => {
+        const content = await html(name)
+        expect(content).toContain("<title>OpenCode Classic</title>")
+      })
     })
   }
 })

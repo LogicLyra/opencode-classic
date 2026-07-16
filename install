@@ -30,6 +30,15 @@ EOF
 requested_version=${VERSION:-}
 no_modify_path=false
 binary_path=""
+release_base=""
+download_tmp_dir=""
+staged_binary=""
+
+cleanup() {
+    if [[ -n "$staged_binary" ]]; then rm -f -- "$staged_binary"; fi
+    if [[ -n "$download_tmp_dir" ]]; then rm -rf -- "$download_tmp_dir"; fi
+}
+trap cleanup EXIT INT TERM HUP
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -182,8 +191,12 @@ else
     fi
 
     if [ -z "$requested_version" ]; then
-        url="https://github.com/$REPO/releases/latest/download/$filename"
-        specific_version=$(curl -s "https://api.github.com/repos/$REPO/releases/latest" | sed -n 's/.*"tag_name": *"v\([^"]*\)".*/\1/p')
+        release_base="https://github.com/$REPO/releases/latest/download"
+        url="$release_base/$filename"
+        specific_version=$(curl --fail --silent --show-error --location \
+            --proto '=https' --proto-redir '=https' \
+            "https://api.github.com/repos/$REPO/releases/latest" | \
+            sed -n 's/.*"tag_name": *"v\([^"]*\)".*/\1/p')
 
         if [[ $? -ne 0 || -z "$specific_version" ]]; then
             echo -e "${RED}Failed to fetch version information${NC}"
@@ -192,12 +205,14 @@ else
     else
         # Strip leading 'v' if present
         requested_version="${requested_version#v}"
-        url="https://github.com/$REPO/releases/download/v${requested_version}/$filename"
+        release_base="https://github.com/$REPO/releases/download/v${requested_version}"
+        url="$release_base/$filename"
         specific_version=$requested_version
 
         # Verify the release exists before downloading
-        http_status=$(curl -sI -o /dev/null -w "%{http_code}" "https://github.com/$REPO/releases/tag/v${requested_version}")
-        if [ "$http_status" = "404" ]; then
+        if ! curl --fail --silent --show-error --head --location \
+            --proto '=https' --proto-redir '=https' \
+            --output /dev/null "$url"; then
             echo -e "${RED}Error: Release v${requested_version} not found${NC}"
             echo -e "${MUTED}Available releases: https://github.com/$REPO/releases${NC}"
             exit 1
@@ -268,16 +283,13 @@ print_progress() {
 download_with_progress() {
     local url="$1"
     local output="$2"
+    local tracefile="$3"
 
     if [ -t 2 ]; then
         exec 4>&2
     else
         exec 4>/dev/null
     fi
-
-    local tmp_dir=${TMPDIR:-/tmp}
-    local basename="${tmp_dir}/opencode_install_$$"
-    local tracefile="${basename}.trace"
 
     rm -f "$tracefile"
     mkfifo "$tracefile"
@@ -288,7 +300,8 @@ download_with_progress() {
     trap "trap - RETURN; rm -f \"$tracefile\"; printf '\033[?25h' >&4; exec 4>&-" RETURN
 
     (
-        curl --trace-ascii "$tracefile" -s -L -o "$output" "$url"
+        curl --trace-ascii "$tracefile" --fail --silent --show-error --location \
+            --proto '=https' --proto-redir '=https' --output "$output" "$url"
     ) &
     local curl_pid=$!
 
@@ -325,25 +338,79 @@ download_with_progress() {
     return $ret
 }
 
+download_file() {
+    curl --fail --silent --show-error --location \
+        --proto '=https' --proto-redir '=https' --output "$2" "$1"
+}
+
+file_sha256() {
+    if command -v sha256sum >/dev/null 2>&1; then
+        sha256sum "$1" | cut -d' ' -f1
+        return
+    fi
+    if command -v shasum >/dev/null 2>&1; then
+        shasum -a 256 "$1" | cut -d' ' -f1
+        return
+    fi
+    echo -e "${RED}Error: 'sha256sum' or 'shasum' is required.${NC}" >&2
+    return 1
+}
+
+verify_checksum() {
+    local archive="$1"
+    local checksums="$2"
+    local expected=""
+    local hash name
+
+    while read -r hash name; do
+        name="${name#\*}"
+        if [[ "$name" == "$filename" ]]; then
+            expected="$hash"
+            break
+        fi
+    done < "$checksums"
+
+    if [[ ! "$expected" =~ ^[0-9a-fA-F]{64}$ ]]; then
+        echo -e "${RED}Error: SHA256SUMS does not contain ${filename}${NC}" >&2
+        return 1
+    fi
+
+    local actual
+    actual=$(file_sha256 "$archive")
+    if [[ "${actual,,}" != "${expected,,}" ]]; then
+        echo -e "${RED}Error: Checksum verification failed for ${filename}${NC}" >&2
+        return 1
+    fi
+}
+
 download_and_install() {
     print_message info "\n${MUTED}Installing ${NC}opencode ${MUTED}version: ${NC}$specific_version"
-    local tmp_dir="${TMPDIR:-/tmp}/opencode_install_$$"
-    mkdir -p "$tmp_dir"
+    local tmp_root="${TMPDIR:-/tmp}"
+    test -d "$tmp_root"
+    download_tmp_dir=$(mktemp -d "${tmp_root%/}/opencode_install.XXXXXXXXXX")
+    chmod 700 "$download_tmp_dir"
+    local archive="$download_tmp_dir/$filename"
+    local checksums="$download_tmp_dir/SHA256SUMS"
 
-    if [[ "$os" == "windows" ]] || ! [ -t 2 ] || ! download_with_progress "$url" "$tmp_dir/$filename"; then
+    if [[ "$os" == "windows" ]] || ! [ -t 2 ] || \
+        ! download_with_progress "$url" "$archive" "$download_tmp_dir/download.trace"; then
         # Fallback to standard curl on Windows, non-TTY environments, or if custom progress fails
-        curl -# -L -o "$tmp_dir/$filename" "$url"
+        download_file "$url" "$archive"
     fi
+    download_file "$release_base/SHA256SUMS" "$checksums"
+    verify_checksum "$archive" "$checksums"
 
     if [ "$os" = "linux" ]; then
-        tar -xzf "$tmp_dir/$filename" -C "$tmp_dir"
+        tar -xzf "$archive" -C "$download_tmp_dir" -- opencode
     else
-        unzip -q "$tmp_dir/$filename" -d "$tmp_dir"
+        unzip -q "$archive" opencode -d "$download_tmp_dir"
     fi
 
-    mv "$tmp_dir/opencode" "$INSTALL_DIR"
-    chmod 755 "${INSTALL_DIR}/opencode"
-    rm -rf "$tmp_dir"
+    staged_binary=$(mktemp "$INSTALL_DIR/.opencode.XXXXXXXXXX")
+    cp "$download_tmp_dir/opencode" "$staged_binary"
+    chmod 755 "$staged_binary"
+    mv -f "$staged_binary" "${INSTALL_DIR}/opencode"
+    staged_binary=""
 }
 
 install_from_binary() {
@@ -440,7 +507,7 @@ if [[ "$no_modify_path" != "true" ]]; then
 fi
 
 if [ -n "${GITHUB_ACTIONS-}" ] && [ "${GITHUB_ACTIONS}" == "true" ]; then
-    echo "$INSTALL_DIR" >> $GITHUB_PATH
+    echo "$INSTALL_DIR" >> "$GITHUB_PATH"
     print_message info "Added $INSTALL_DIR to \$GITHUB_PATH"
 fi
 

@@ -14,7 +14,7 @@
 </p>
 
 > [!IMPORTANT]
-> OpenCode Classic is an unofficial fork that tracks upstream while preserving the classic desktop layout. Its releases and updater are maintained independently at [`LogicLyra/opencode-classic`](https://github.com/LogicLyra/opencode-classic). Translated READMEs are inherited from upstream and may contain upstream installation links.
+> OpenCode Classic is an unofficial Linux-focused fork that tracks upstream while preserving the classic desktop layout. Its releases and updater are maintained independently at [`LogicLyra/opencode-classic`](https://github.com/LogicLyra/opencode-classic). Translated READMEs are inherited from upstream and may contain upstream installation links.
 
 <p align="center">
   <a href="README.md">English</a> |
@@ -56,11 +56,15 @@ curl -fsSL https://github.com/LogicLyra/opencode-classic/releases/latest/downloa
 
 ### Desktop App (BETA)
 
-OpenCode Classic desktop builds are available from the fork's [releases page](https://github.com/LogicLyra/opencode-classic/releases).
+OpenCode Classic desktop builds support Linux only and are available from the fork's [releases page](https://github.com/LogicLyra/opencode-classic/releases).
 
-| Platform  | Download                                                         |
-| --------- | ---------------------------------------------------------------- |
-| Linux x64 | `opencode-classic-desktop-linux-*` (`.deb`, `.rpm`, or AppImage) |
+| Platform  | Download                                              |
+| --------- | ----------------------------------------------------- |
+| Linux x64 | `opencode-classic-desktop-linux-*` (`.deb` or `.rpm`) |
+
+AppImage is intentionally not distributed. Ubuntu 24.04 and newer can force Electron AppImages to disable Chromium sandboxing under the default AppArmor policy; the installed deb and RPM formats retain the sandbox integration expected by the distribution.
+
+Maintainers can reproduce the complete build, package, installed-deb, and visual release gate with the [Linux VM release QA runbook](docs/linux-vm-qa.md).
 
 #### Installation Directory
 

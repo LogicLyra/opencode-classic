@@ -1,6 +1,7 @@
 import { Link } from "@solidjs/meta"
 import { For } from "solid-js"
 import { getRequestEvent } from "solid-js/web"
+import { getContext, setContext } from "@solidjs/start/http"
 import { config } from "~/config"
 import { useLanguage } from "~/context/language"
 import { LOCALES, route, tag } from "~/lib/language"
@@ -10,9 +11,9 @@ function skip(path: string) {
   if (!evt) return false
 
   const key = "__locale_links_seen"
-  const locals = evt.locals as Record<string, unknown>
-  const seen = locals[key] instanceof Set ? (locals[key] as Set<string>) : new Set<string>()
-  locals[key] = seen
+  const value = getContext(key)
+  const seen = value instanceof Set ? (value as Set<string>) : new Set<string>()
+  setContext(key, seen)
   if (seen.has(path)) return true
   seen.add(path)
   return false

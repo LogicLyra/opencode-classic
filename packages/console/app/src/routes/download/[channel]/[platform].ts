@@ -1,5 +1,12 @@
-import type { APIEvent } from "@solidjs/start"
+import type { APIEvent } from "@solidjs/start/server"
 import type { DownloadPlatform } from "../types"
+
+type DownloadEvent = APIEvent & {
+  params: {
+    channel: string
+    platform: string
+  }
+}
 
 const prodAssetNames: Record<string, string> = {
   "darwin-aarch64-dmg": "opencode-desktop-mac-arm64.dmg",
@@ -26,7 +33,7 @@ const downloadNames: Record<string, string> = {
   "windows-x64-nsis": "OpenCode Desktop Installer.exe",
 } satisfies { [K in DownloadPlatform]?: string }
 
-export async function GET({ params: { platform, channel } }: APIEvent) {
+export async function GET({ params: { platform, channel } }: DownloadEvent) {
   const assetName = channel === "stable" ? prodAssetNames[platform] : betaAssetNames[platform]
   if (!assetName) return new Response(null, { status: 404 })
 

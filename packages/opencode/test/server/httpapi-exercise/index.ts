@@ -536,6 +536,7 @@ const scenarios: Scenario[] = [
   http.protected
     .post("/experimental/worktree", "worktree.create")
     .mutating()
+    .seeded((ctx) => ctx.worktreeReady())
     .at((ctx) => ({ path: "/experimental/worktree", headers: ctx.headers(), body: { name: "api-dsl" } }))
     .jsonEffect(
       200,
@@ -543,6 +544,7 @@ const scenarios: Scenario[] = [
         Effect.gen(function* () {
           object(body)
           check(typeof body.directory === "string", "created worktree should include directory")
+          yield* ctx.state(body.directory)
           yield* ctx.worktreeRemove(body.directory)
         }),
       "status",

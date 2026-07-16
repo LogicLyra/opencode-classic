@@ -66,7 +66,7 @@
       "effect": "4.0.0-beta.83",
       "ai": "6.0.168",
       "cross-spawn": "7.0.6",
-      "hono": "4.10.7",
+      "hono": "4.12.29",
       "hono-openapi": "1.1.2",
       "fuzzysort": "3.1.0",
       "luxon": "3.6.1",
@@ -83,10 +83,10 @@
       "shiki": "4.2.0",
       "solid-list": "0.3.0",
       "tailwindcss": "4.1.11",
-      "vite": "7.1.4",
+      "vite": "7.3.6",
       "@solidjs/meta": "0.29.4",
       "@solidjs/router": "0.15.4",
-      "@solidjs/start": "https://pkg.pr.new/@solidjs/start@dfb2020",
+      "@solidjs/start": "2.0.0-alpha.3",
       "@sentry/solid": "10.36.0",
       "@sentry/vite-plugin": "4.6.0",
       "solid-js": "1.9.10",
@@ -95,7 +95,6 @@
     }
   },
   "devDependencies": {
-    "@actions/artifact": "5.0.1",
     "@tsconfig/bun": "catalog:",
     "@types/mime-types": "3.0.1",
     "@typescript/native-preview": "catalog:",
@@ -109,7 +108,7 @@
     "turbo": "2.10.2"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "3.933.0",
+    "@aws-sdk/client-s3": "3.1085.0",
     "@opencode-ai/plugin": "workspace:*",
     "@opencode-ai/script": "workspace:*",
     "@opencode-ai/sdk": "workspace:*",
@@ -140,7 +139,15 @@
     "@opentui/keymap": "catalog:",
     "@opentui/solid": "catalog:",
     "@types/bun": "catalog:",
-    "@types/node": "catalog:"
+    "@types/node": "catalog:",
+    "form-data": "4.0.6",
+    "h3": "2.0.1-rc.25",
+    "hono": "4.12.29",
+    "minimatch": "10.2.5",
+    "seroval": "1.5.5",
+    "vite": "7.3.6",
+    "wrangler": "4.110.0",
+    "ws": "8.21.0"
   },
   "patchedDependencies": {
     "@ff-labs/fff-bun@0.9.3": "patches/@ff-labs%2Ffff-bun@0.9.3.patch",

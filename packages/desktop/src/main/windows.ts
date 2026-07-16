@@ -13,11 +13,10 @@ import { getStore, removeStoreFile } from "./store"
 import { PINCH_ZOOM_ENABLED_KEY, WINDOW_IDS_KEY } from "./store-keys"
 import { createUnresponsiveSampler } from "./unresponsive"
 import { createWindowRegistry } from "./window-registry"
+import { isTrustedRendererUrl, RENDERER_HOST, RENDERER_SCHEME } from "./renderer-security"
 
 const root = dirname(fileURLToPath(import.meta.url))
 const rendererRoot = join(root, "../renderer")
-const rendererProtocol = "oc"
-const rendererHost = "renderer"
 const clipboardWritePermission = "clipboard-sanitized-write"
 const notificationPermission = "notifications"
 const rendererPermissions = new Set([clipboardWritePermission, notificationPermission])
@@ -31,7 +30,7 @@ const jsCallStacksDocumentPolicy = "include-js-call-stacks-in-crash-reports"
 
 protocol.registerSchemesAsPrivileged([
   {
-    scheme: rendererProtocol,
+    scheme: RENDERER_SCHEME,
     privileges: {
       secure: true,
       standard: true,
@@ -177,7 +176,7 @@ export function createMainWindow(id: string = randomUUID()) {
     height: state.height,
     show: false,
     autoHideMenuBar: true,
-    title: "OpenCode",
+    title: app.getName(),
     icon: iconPath(),
     backgroundColor: backgroundColor ?? defaultBackgroundColor(),
     ...(process.platform === "darwin"
@@ -202,6 +201,7 @@ export function createMainWindow(id: string = randomUUID()) {
   })
 
   allowRendererPermissions(win)
+  enforceRendererNavigation(win)
   wireWindowRecovery(win, id)
 
   win.webContents.session.webRequest.onBeforeSendHeaders((details, callback) => {
@@ -250,11 +250,11 @@ function windowDataFile(id: string) {
 }
 
 export function registerRendererProtocol() {
-  if (protocol.isProtocolHandled(rendererProtocol)) return
+  if (protocol.isProtocolHandled(RENDERER_SCHEME)) return
 
-  protocol.handle(rendererProtocol, async (request) => {
+  protocol.handle(RENDERER_SCHEME, async (request) => {
     const url = new URL(request.url)
-    if (url.host !== rendererHost) {
+    if (url.host !== RENDERER_HOST) {
       writeLog("protocol", "rejected host", { url: request.url }, "warn")
       return new Response("Not found", { status: 404 })
     }
@@ -300,7 +300,23 @@ function loadWindow(win: BrowserWindow, html: string) {
     return
   }
 
-  void win.loadURL(`${rendererProtocol}://${rendererHost}/${html}`)
+  void win.loadURL(`${RENDERER_SCHEME}://${RENDERER_HOST}/${html}`)
+}
+
+function enforceRendererNavigation(win: BrowserWindow) {
+  win.webContents.on("will-navigate", (event, url) => {
+    if (isTrustedRendererUrl(url)) return
+    event.preventDefault()
+    writeLog("window", "blocked renderer navigation", { url }, "warn")
+  })
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    writeLog("window", "blocked renderer window creation", { url }, "warn")
+    return { action: "deny" }
+  })
+  win.webContents.on("will-attach-webview", (event) => {
+    event.preventDefault()
+    writeLog("window", "blocked renderer webview attachment", undefined, "warn")
+  })
 }
 
 function wireWindowRecovery(win: BrowserWindow, name: string) {
@@ -441,10 +457,6 @@ function allowRendererPermissions(win: BrowserWindow) {
   })
 }
 
-function isTrustedRendererUrl(value?: string) {
-  return isRendererUrl(value)
-}
-
 function addRendererHeaders(value: string, headers: Record<string, any>) {
   upsertKeyValue(headers, "Access-Control-Allow-Origin", ["*"])
   upsertKeyValue(headers, "Access-Control-Allow-Headers", ["*"])
@@ -455,10 +467,7 @@ function isRendererUrl(value?: string, html = false) {
   if (!value || !URL.canParse(value)) return false
   const url = new URL(value)
   if (html && !url.pathname.endsWith(".html")) return false
-  if (url.protocol === `${rendererProtocol}:` && url.host === rendererHost) return true
-  const devUrl = process.env.ELECTRON_RENDERER_URL
-  if (!devUrl || !URL.canParse(devUrl)) return false
-  return url.origin === new URL(devUrl).origin
+  return isTrustedRendererUrl(value)
 }
 
 function wireZoom(win: BrowserWindow) {

@@ -49,6 +49,11 @@ const getBase = (identity: (typeof DESKTOP_IDENTITIES)[keyof typeof DESKTOP_IDEN
       to: "native/",
       filter: ["index.js", "index.d.ts", "build/Release/mac_window.node", "swift-build/**"],
     },
+    {
+      from: "resources/icons/",
+      to: "icons/",
+      filter: ["**/*"],
+    },
   ],
   mac: {
     category: "public.app-category.developer-tools",
@@ -92,7 +97,7 @@ const getBase = (identity: (typeof DESKTOP_IDENTITIES)[keyof typeof DESKTOP_IDEN
         StartupWMClass: identity.appId,
       },
     },
-    target: ["AppImage", "deb", "rpm"],
+    target: ["deb", "rpm"],
   },
 })
 

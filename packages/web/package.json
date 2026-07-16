@@ -4,24 +4,24 @@
   "license": "MIT",
   "version": "1.18.1",
   "scripts": {
-    "dev": "astro dev",
-    "dev:remote": "VITE_API_URL=https://api.opencode.ai astro dev",
-    "start": "astro dev",
-    "build": "astro build",
-    "preview": "astro preview",
-    "astro": "astro"
+    "dev": "node ./node_modules/astro/bin/astro.mjs dev",
+    "dev:remote": "VITE_API_URL=https://api.opencode.ai node ./node_modules/astro/bin/astro.mjs dev",
+    "start": "node ./node_modules/astro/bin/astro.mjs dev",
+    "build": "node ./node_modules/astro/bin/astro.mjs build",
+    "preview": "node ./node_modules/astro/bin/astro.mjs preview",
+    "astro": "node ./node_modules/astro/bin/astro.mjs"
   },
   "dependencies": {
-    "@astrojs/cloudflare": "12.6.3",
-    "@astrojs/markdown-remark": "6.3.1",
-    "@astrojs/solid-js": "5.1.0",
-    "@astrojs/starlight": "0.34.3",
+    "@astrojs/cloudflare": "13.7.0",
+    "@astrojs/markdown-remark": "7.2.1",
+    "@astrojs/solid-js": "6.0.1",
+    "@astrojs/starlight": "0.39.3",
     "@fontsource/ibm-plex-mono": "5.2.5",
     "@shikijs/transformers": "3.20.0",
     "@solid-primitives/resize-observer": "2.1.5",
     "@types/luxon": "catalog:",
     "ai": "catalog:",
-    "astro": "5.7.13",
+    "astro": "6.4.8",
     "diff": "catalog:",
     "js-base64": "3.7.7",
     "lang-map": "0.4.0",
@@ -32,7 +32,6 @@
     "remeda": "catalog:",
     "shiki": "catalog:",
     "solid-js": "catalog:",
-    "toolbeam-docs-theme": "0.4.8",
     "vscode-languageserver-types": "3.17.5"
   },
   "devDependencies": {

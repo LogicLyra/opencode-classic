@@ -31,6 +31,9 @@ type PlatformBase = {
   /** App version */
   version?: string
 
+  /** Product name supplied by the host application */
+  productName?: string
+
   /** Open a URL in the default browser */
   openLink(url: string): void
 

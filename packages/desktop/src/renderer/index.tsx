@@ -29,8 +29,11 @@ import { availableStartupServer, readyWslConnections } from "./wsl/connections"
 import "./styles.css"
 import { Splash } from "@opencode-ai/ui/logo"
 import { useTheme } from "@opencode-ai/ui/theme/context"
+import { DESKTOP_IDENTITIES } from "../identity"
 
 const root = document.getElementById("root")
+const channel = import.meta.env.OPENCODE_CHANNEL
+const identity = DESKTOP_IDENTITIES[channel === "beta" || channel === "prod" ? channel : "dev"]
 if (import.meta.env.DEV && !(root instanceof HTMLElement)) {
   throw new Error(t("error.dev.rootNotFound"))
 }
@@ -169,6 +172,7 @@ const createPlatform = (windowState: DesktopWindowState): Platform => {
     platform: "desktop",
     os,
     version: pkg.version,
+    productName: identity.productName,
     windowID: windowState.id,
 
     async openDirectoryPickerDialog(opts) {

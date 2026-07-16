@@ -72,7 +72,7 @@ export const DialogSettings: Component<{
               </div>
             </div>
             <div class="settings-v2-nav-footer">
-              <span>{language.t("app.name.desktop")}</span>
+              <span>{platform.productName ?? language.t("app.name.desktop")}</span>
               <span>v{platform.version}</span>
             </div>
           </div>
