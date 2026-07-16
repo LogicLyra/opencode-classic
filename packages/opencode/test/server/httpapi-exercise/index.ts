@@ -149,6 +149,7 @@ const scenarios: Scenario[] = [
     .patch("/config", "config.update")
     .mutating()
     .inProject({ git: false })
+    .probe({ path: "/config", body: { username: 1 } })
     .at((ctx) => ({ path: "/config", headers: ctx.headers(), body: { username: "httpapi-local" } }))
     .json(
       200,
@@ -160,6 +161,7 @@ const scenarios: Scenario[] = [
     ),
   http.protected
     .patch("/config", "config.update.invalid")
+    .probe({ path: "/config", body: { username: 1 } })
     .at((ctx) => ({ path: "/config", headers: ctx.headers(), body: { username: 1 } }))
     .status(400),
   http.protected.get("/config/providers", "config.providers").json(),
