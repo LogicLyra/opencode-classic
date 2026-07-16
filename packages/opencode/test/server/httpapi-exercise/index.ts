@@ -148,6 +148,7 @@ const scenarios: Scenario[] = [
   http.protected
     .patch("/config", "config.update")
     .mutating()
+    .inProject({ git: false })
     .at((ctx) => ({ path: "/config", headers: ctx.headers(), body: { username: "httpapi-local" } }))
     .json(
       200,
