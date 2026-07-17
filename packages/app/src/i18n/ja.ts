@@ -119,6 +119,8 @@ export const dict = {
   "provider.connect.title.anthropicProMax": "Claude Pro/Maxでログイン",
   "provider.connect.selectMethod": "{{provider}}のログイン方法を選択してください。",
   "provider.connect.method.apiKey": "APIキー",
+  "provider.connect.method.hint.browser": "ブラウザ",
+  "provider.connect.method.hint.headless": "ヘッドレス",
   "provider.connect.status.inProgress": "認証中...",
   "provider.connect.status.waiting": "認証を待機中...",
   "provider.connect.status.failed": "認証に失敗しました: {{error}}",

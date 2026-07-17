@@ -131,6 +131,8 @@ export const dict = {
   "provider.connect.title.anthropicProMax": "Iniciar sesión con Claude Pro/Max",
   "provider.connect.selectMethod": "Seleccionar método de inicio de sesión para {{provider}}.",
   "provider.connect.method.apiKey": "Clave API",
+  "provider.connect.method.hint.browser": "Navegador",
+  "provider.connect.method.hint.headless": "Sin interfaz",
   "provider.connect.status.inProgress": "Autorización en progreso...",
   "provider.connect.status.waiting": "Esperando autorización...",
   "provider.connect.status.failed": "Autorización fallida: {{error}}",

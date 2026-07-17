@@ -131,6 +131,8 @@ export const dict = {
   "provider.connect.title.anthropicProMax": "Log ind med Claude Pro/Max",
   "provider.connect.selectMethod": "Vælg loginmetode for {{provider}}.",
   "provider.connect.method.apiKey": "API-nøgle",
+  "provider.connect.method.hint.browser": "Browser",
+  "provider.connect.method.hint.headless": "Headless",
   "provider.connect.status.inProgress": "Godkendelse i gang...",
   "provider.connect.status.waiting": "Venter på godkendelse...",
   "provider.connect.status.failed": "Godkendelse mislykkedes: {{error}}",

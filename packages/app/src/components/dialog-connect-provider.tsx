@@ -35,6 +35,7 @@ import { useLanguage } from "@/context/language"
 import { useSettings } from "@/context/settings"
 import { popularProviders, useProviders } from "@/hooks/use-providers"
 import { CustomProviderForm } from "./dialog-custom-provider"
+import { isProviderButton, methodDetails, methodLabel, nextActiveIndex } from "./dialog-connect-provider-helpers"
 
 const CUSTOM_ID = "_custom"
 
@@ -259,6 +260,10 @@ function ProviderPickerV2(props: {
       }),
   )
   const rows = createMemo(() => [...popular(), ...other()])
+  const listboxID = createUniqueId()
+  const popularGroupID = `${listboxID}-popular`
+  const otherGroupID = `${listboxID}-other`
+  const optionID = (provider: string) => `${listboxID}-${encodeURIComponent(provider)}`
   let picker: HTMLDivElement | undefined
   let search: HTMLInputElement | undefined
 
@@ -284,19 +289,25 @@ function ProviderPickerV2(props: {
   const move = (event: KeyboardEvent, direction: number) => {
     const items = rows()
     if (items.length === 0) return
-    const index = items.findIndex((provider) => provider.id === store.active)
-    const next = index < 0 ? (direction > 0 ? 0 : items.length - 1) : (index + direction + items.length) % items.length
-    setStore("active", items[next].id)
-    picker
-      ?.querySelector<HTMLElement>(`[data-provider-id="${CSS.escape(items[next].id)}"]`)
-      ?.focus({ preventScroll: true })
+    const current = items.findIndex((provider) => provider.id === store.active)
+    const next = nextActiveIndex(current, direction, items.length)
+    if (next < 0) return
+    const item = items[next]
+    if (!item) return
+    setStore("active", item.id)
+    const row = picker?.querySelector<HTMLElement>(`[data-provider-id="${CSS.escape(item.id)}"]`)
+    row?.scrollIntoView({ block: "nearest" })
     event.preventDefault()
   }
 
   const handleKeyDown = (event: KeyboardEvent) => {
     if (event.key === "ArrowDown") return move(event, 1)
     if (event.key === "ArrowUp") return move(event, -1)
-    if (event.key !== "Enter" || !store.active) return
+    if (event.key !== "Enter") return
+    // A focused provider button activates natively on Enter; defer to that
+    // so we never connect a stale `active` row.
+    if (isProviderButton(event.target)) return
+    if (!store.active) return
     connect(store.active)
     event.preventDefault()
   }
@@ -310,6 +321,12 @@ function ProviderPickerV2(props: {
           class="!w-full [font-family:var(--v2-font-family-sans)]"
           leadingIcon={<Icon name="magnifying-glass" size="small" />}
           placeholder={language.t("dialog.provider.search.placeholder")}
+          role="combobox"
+          aria-label={language.t("dialog.provider.search.placeholder")}
+          aria-autocomplete="list"
+          aria-controls={listboxID}
+          aria-expanded="true"
+          aria-activedescendant={store.active ? optionID(store.active) : undefined}
           value={store.filter}
           onInput={(event) => {
             setStore({ filter: event.currentTarget.value, active: undefined })
@@ -317,62 +334,80 @@ function ProviderPickerV2(props: {
         />
       </div>
       <div class="relative min-h-0 flex-1">
-        <div class="flex size-full min-h-0 flex-col gap-4 overflow-y-auto pb-8 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          <For
-            each={[
-              { title: language.t("dialog.provider.group.popular"), items: popular },
-              { title: language.t("dialog.provider.group.other"), items: other },
-            ]}
+        <div class="size-full min-h-0 overflow-y-auto pb-8 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <div
+            id={listboxID}
+            role="listbox"
+            aria-label={language.t("dialog.provider.search.placeholder")}
+            class="flex flex-col gap-4"
           >
-            {(group) => (
-              <Show when={group.items().length > 0}>
-                <section class="flex flex-col">
-                  <div class="px-3 pb-2 text-[13px] font-[440] leading-none tracking-[-0.04px] text-v2-text-text-muted">
-                    {group.title}
-                  </div>
-                  <For each={group.items()}>
-                    {(provider) => (
-                      <button
-                        type="button"
-                        data-provider-id={provider.id}
-                        class="flex min-h-9 w-full items-center gap-2 rounded-md px-3 py-2.5 text-left text-[13px] leading-none tracking-[-0.04px] hover:bg-v2-overlay-simple-overlay-hover focus:bg-v2-overlay-simple-overlay-hover focus:outline-none"
-                        classList={{ "bg-v2-overlay-simple-overlay-hover": store.active === provider.id }}
-                        onMouseEnter={() => setStore("active", provider.id)}
-                        disabled={store.connecting !== undefined}
-                        aria-busy={store.connecting === provider.id}
-                        onClick={() => connect(provider.id)}
-                      >
-                        <ProviderIcon id={provider.id} class="size-4 shrink-0 text-v2-icon-icon-base" />
-                        <span class="min-w-0 truncate font-[530] text-v2-text-text-base">{provider.name}</span>
-                        <Show when={provider.id === "opencode" || provider.id === "opencode-go"}>
-                          <span class="min-w-0 truncate font-[440] text-v2-text-text-muted">
-                            {language.t(
-                              provider.id === "opencode"
-                                ? "dialog.provider.opencode.tagline"
-                                : "dialog.provider.opencodeGo.tagline",
-                            )}
-                          </span>
-                          <span class="flex h-4 shrink-0 items-center rounded-xs border-[0.5px] border-v2-border-border-base bg-v2-background-bg-layer-03 px-1 text-[11px] font-[530] leading-none tracking-[0.05px] text-v2-text-text-muted">
-                            {language.t("dialog.provider.tag.recommended")}
-                          </span>
-                        </Show>
-                        <Show when={provider.id === CUSTOM_ID}>
-                          <span class="flex h-4 shrink-0 items-center rounded-xs border-[0.5px] border-v2-border-border-base bg-v2-background-bg-layer-03 px-1 text-[11px] font-[530] leading-none tracking-[0.05px] text-v2-text-text-muted">
-                            {language.t("settings.providers.tag.custom")}
-                          </span>
-                        </Show>
-                        <Show when={store.connecting === provider.id}>
-                          <Spinner class="ml-auto size-4 shrink-0 text-v2-icon-icon-muted" />
-                        </Show>
-                      </button>
-                    )}
-                  </For>
-                </section>
-              </Show>
-            )}
-          </For>
+            <For
+              each={[
+                { id: popularGroupID, title: language.t("dialog.provider.group.popular"), items: popular },
+                { id: otherGroupID, title: language.t("dialog.provider.group.other"), items: other },
+              ]}
+            >
+              {(group) => (
+                <Show when={group.items().length > 0}>
+                  <section role="group" aria-labelledby={group.id} class="flex flex-col">
+                    <h3
+                      id={group.id}
+                      class="px-3 pb-2 text-[13px] font-[440] leading-none tracking-[-0.04px] text-v2-text-text-muted"
+                    >
+                      {group.title}
+                    </h3>
+                    <For each={group.items()}>
+                      {(provider) => (
+                        <button
+                          id={optionID(provider.id)}
+                          type="button"
+                          role="option"
+                          tabIndex={-1}
+                          aria-selected={store.active === provider.id}
+                          data-provider-id={provider.id}
+                          class="flex min-h-9 w-full items-center gap-2 rounded-md px-3 py-2.5 text-left text-[13px] leading-none tracking-[-0.04px] hover:bg-v2-overlay-simple-overlay-hover focus:bg-v2-overlay-simple-overlay-hover focus:outline-none"
+                          classList={{ "bg-v2-overlay-simple-overlay-hover": store.active === provider.id }}
+                          onFocus={() => setStore("active", provider.id)}
+                          disabled={store.connecting !== undefined}
+                          aria-busy={store.connecting === provider.id}
+                          onClick={() => connect(provider.id)}
+                        >
+                          <ProviderIcon id={provider.id} class="size-4 shrink-0 text-v2-icon-icon-base" />
+                          <span class="min-w-0 truncate font-[530] text-v2-text-text-base">{provider.name}</span>
+                          <Show when={provider.id === "opencode" || provider.id === "opencode-go"}>
+                            <span class="min-w-0 truncate font-[440] text-v2-text-text-muted">
+                              {language.t(
+                                provider.id === "opencode"
+                                  ? "dialog.provider.opencode.tagline"
+                                  : "dialog.provider.opencodeGo.tagline",
+                              )}
+                            </span>
+                            <span class="flex h-4 shrink-0 items-center rounded-xs border-[0.5px] border-v2-border-border-base bg-v2-background-bg-layer-03 px-1 text-[11px] font-[530] leading-none tracking-[0.05px] text-v2-text-text-muted">
+                              {language.t("dialog.provider.tag.recommended")}
+                            </span>
+                          </Show>
+                          <Show when={provider.id === CUSTOM_ID}>
+                            <span class="flex h-4 shrink-0 items-center rounded-xs border-[0.5px] border-v2-border-border-base bg-v2-background-bg-layer-03 px-1 text-[11px] font-[530] leading-none tracking-[0.05px] text-v2-text-text-muted">
+                              {language.t("settings.providers.tag.custom")}
+                            </span>
+                          </Show>
+                          <Show when={store.connecting === provider.id}>
+                            <Spinner class="ml-auto size-4 shrink-0 text-v2-icon-icon-muted" />
+                          </Show>
+                        </button>
+                      )}
+                    </For>
+                  </section>
+                </Show>
+              )}
+            </For>
+          </div>
           <Show when={rows().length === 0}>
-            <div class="flex h-24 items-center justify-center text-[13px] font-[440] text-v2-text-text-muted">
+            <div
+              role="status"
+              aria-live="polite"
+              class="flex h-24 items-center justify-center text-[13px] font-[440] text-v2-text-text-muted"
+            >
               {language.t("dialog.provider.empty")}
             </div>
           </Show>
@@ -506,21 +541,9 @@ function ProviderConnection(props: {
 
   const method = createMemo(() => (store.methodIndex !== undefined ? methods().at(store.methodIndex!) : undefined))
 
-  const methodLabel = (value?: { type?: string; label?: string }) => {
-    if (!value) return ""
-    if (value.type === "api") return language.t("provider.connect.method.apiKey")
-    return value.label ?? ""
-  }
-
-  const methodDetails = (value?: { type?: string; label?: string }) => {
-    const label = methodLabel(value)
-    const suffix = value?.label?.match(/\s+\((browser|headless)\)$/i)
-    const hint = suffix?.[1]
-    return {
-      label: suffix ? label.slice(0, -suffix[0].length) : label,
-      hint: hint ? hint[0].toUpperCase() + hint.slice(1) : value?.type === "api" ? "Browser" : undefined,
-    }
-  }
+  const t = (key: string, vars?: Record<string, string | number | boolean>) => language.t(key, vars)
+  const detailsFor = (value?: { type?: string; label?: string }) => methodDetails(value, t)
+  const labelFor = (value?: { type?: string; label?: string }) => methodLabel(value, t)
 
   function formatError(value: unknown, fallback: string): string {
     if (value && typeof value === "object" && "data" in value) {
@@ -771,7 +794,7 @@ function ProviderConnection(props: {
           <div class="flex flex-col">
             <For each={methods()}>
               {(item, index) => {
-                const details = () => methodDetails(item)
+                const details = () => detailsFor(item)
                 return (
                   <button
                     type="button"
@@ -816,7 +839,7 @@ function ProviderConnection(props: {
                 <div class="w-4 h-2 rounded-[1px] bg-input-base shadow-xs-border-base flex items-center justify-center">
                   <div class="w-2.5 h-0.5 ml-0 bg-icon-strong-base hidden" data-slot="list-item-extra-icon" />
                 </div>
-                <span>{methodLabel(i)}</span>
+                <span>{labelFor(i)}</span>
               </div>
             )}
           </List>

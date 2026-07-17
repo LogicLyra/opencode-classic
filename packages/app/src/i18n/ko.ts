@@ -115,6 +115,8 @@ export const dict = {
   "provider.connect.title.anthropicProMax": "Claude Pro/Max로 로그인",
   "provider.connect.selectMethod": "{{provider}} 로그인 방법 선택",
   "provider.connect.method.apiKey": "API 키",
+  "provider.connect.method.hint.browser": "브라우저",
+  "provider.connect.method.hint.headless": "헤드리스",
   "provider.connect.status.inProgress": "인증 진행 중...",
   "provider.connect.status.waiting": "인증 대기 중...",
   "provider.connect.status.failed": "인증 실패: {{error}}",

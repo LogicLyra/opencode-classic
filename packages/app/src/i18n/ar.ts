@@ -119,6 +119,8 @@ export const dict = {
   "provider.connect.title.anthropicProMax": "تسجيل الدخول باستخدام Claude Pro/Max",
   "provider.connect.selectMethod": "حدد طريقة تسجيل الدخول لـ {{provider}}.",
   "provider.connect.method.apiKey": "مفتاح API",
+  "provider.connect.method.hint.browser": "متصفح",
+  "provider.connect.method.hint.headless": "بدون واجهة",
   "provider.connect.status.inProgress": "جارٍ التفويض...",
   "provider.connect.status.waiting": "في انتظار التفويض...",
   "provider.connect.status.failed": "فشل التفويض: {{error}}",

@@ -130,6 +130,8 @@ export const dict = {
   "provider.connect.title.anthropicProMax": "Logg inn med Claude Pro/Max",
   "provider.connect.selectMethod": "Velg innloggingsmetode for {{provider}}.",
   "provider.connect.method.apiKey": "API-nøkkel",
+  "provider.connect.method.hint.browser": "Nettleser",
+  "provider.connect.method.hint.headless": "Headless",
   "provider.connect.status.inProgress": "Autorisering pågår...",
   "provider.connect.status.waiting": "Venter på autorisering...",
   "provider.connect.status.failed": "Autorisering mislyktes: {{error}}",

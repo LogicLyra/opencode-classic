@@ -131,6 +131,8 @@ export const dict = {
   "provider.connect.title.anthropicProMax": "Войти с помощью Claude Pro/Max",
   "provider.connect.selectMethod": "Выберите способ входа для {{provider}}.",
   "provider.connect.method.apiKey": "API ключ",
+  "provider.connect.method.hint.browser": "Браузер",
+  "provider.connect.method.hint.headless": "Без интерфейса",
   "provider.connect.status.inProgress": "Авторизация...",
   "provider.connect.status.waiting": "Ожидание авторизации...",
   "provider.connect.status.failed": "Ошибка авторизации: {{error}}",

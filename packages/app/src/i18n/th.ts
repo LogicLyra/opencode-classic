@@ -131,6 +131,8 @@ export const dict = {
   "provider.connect.title.anthropicProMax": "เข้าสู่ระบบด้วย Claude Pro/Max",
   "provider.connect.selectMethod": "เลือกวิธีการเข้าสู่ระบบสำหรับ {{provider}}",
   "provider.connect.method.apiKey": "คีย์ API",
+  "provider.connect.method.hint.browser": "เบราว์เซอร์",
+  "provider.connect.method.hint.headless": "โหมดไม่มีส่วนหัว",
   "provider.connect.status.inProgress": "กำลังอนุญาต...",
   "provider.connect.status.waiting": "รอการอนุญาต...",
   "provider.connect.status.failed": "การอนุญาตล้มเหลว: {{error}}",

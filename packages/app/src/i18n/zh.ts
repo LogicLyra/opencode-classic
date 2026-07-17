@@ -157,6 +157,8 @@ export const dict = {
   "provider.connect.title.anthropicProMax": "使用 Claude Pro/Max 登录",
   "provider.connect.selectMethod": "选择 {{provider}} 的登录方式。",
   "provider.connect.method.apiKey": "API 密钥",
+  "provider.connect.method.hint.browser": "浏览器",
+  "provider.connect.method.hint.headless": "无界面",
   "provider.connect.status.inProgress": "正在授权...",
   "provider.connect.status.waiting": "等待授权...",
   "provider.connect.status.failed": "授权失败：{{error}}",
