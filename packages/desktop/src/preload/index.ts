@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer, webUtils } from "electron"
 import type { ElectronAPI, WslServersEvent } from "./types"
 import type { UpdaterState } from "@opencode-ai/app/updater"
+import { createFocusSetter } from "./focus"
 
 const updaterCallbacks = new Set<(state: UpdaterState) => void>()
 let updaterState: UpdaterState | undefined
@@ -9,6 +10,7 @@ const updaterHandler = (_: unknown, state: UpdaterState) => {
   updaterState = state
   updaterCallbacks.forEach((callback) => callback(state))
 }
+const setForceFocus = createFocusSetter((enabled) => ipcRenderer.invoke("set-force-focus", enabled))
 
 const api: ElectronAPI = {
   killSidecar: () => ipcRenderer.invoke("kill-sidecar"),
@@ -121,7 +123,7 @@ const api: ElectronAPI = {
   runDesktopMenuAction: (action) => ipcRenderer.invoke("run-desktop-menu-action", action),
   setBackgroundColor: (color: string) => ipcRenderer.invoke("set-background-color", color),
   exportDebugLogs: () => ipcRenderer.invoke("export-debug-logs"),
-  setForceFocus: (enabled) => ipcRenderer.invoke("set-force-focus", enabled),
+  setForceFocus,
   recordFatalRendererError: (error) => ipcRenderer.invoke("record-fatal-renderer-error", error),
 }
 

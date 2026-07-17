@@ -29,6 +29,7 @@ type Obs = PerformanceObserverInit & {
 }
 
 const span = 5000
+let focusDebugGeneration = 0
 
 const ms = (n?: number, d = 0) => {
   if (n === undefined || Number.isNaN(n)) return
@@ -108,14 +109,17 @@ function Cell(props: {
   )
 }
 
-function FocusCell(props: { active: boolean; inline?: boolean; onClick: () => void }) {
+function FocusCell(props: { active: boolean; pending: boolean; inline?: boolean; onClick: () => void }) {
   const content = () => (
     <button
       type="button"
       aria-label="Force focus styles on all interactive elements"
       aria-pressed={props.active}
+      aria-busy={props.pending}
+      aria-disabled={props.pending}
       classList={{
         "flex min-w-0 items-center font-mono uppercase hover:bg-surface-raised-base focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-border-focus": true,
+        "cursor-wait opacity-70": props.pending,
         "min-h-[20px] w-fit flex-row justify-start gap-1.5 rounded px-1.5 py-0.5 text-left": !!props.inline,
         "min-h-[42px] w-full flex-col justify-center rounded-[8px] px-0.5 py-1 text-center": !props.inline,
         "bg-surface-raised-base text-text-strong": props.active,
@@ -124,7 +128,7 @@ function FocusCell(props: { active: boolean; inline?: boolean; onClick: () => vo
     >
       <span class="text-[10px] leading-none font-black tracking-[0.04em] opacity-70">FOCUS</span>
       <span classList={{ "leading-none font-bold": true, "text-[11px]": !!props.inline, "text-[13px]": !props.inline }}>
-        {props.active ? "ON" : "OFF"}
+        {props.pending ? "..." : props.active ? "ON" : "OFF"}
       </span>
     </button>
   )
@@ -155,6 +159,7 @@ export function DebugBar(props: { inline?: boolean } = {}) {
     fps: undefined as number | undefined,
     gap: undefined as number | undefined,
     focus: false,
+    focusPending: false,
     heap: {
       limit: undefined as number | undefined,
       used: undefined as number | undefined,
@@ -181,20 +186,103 @@ export function DebugBar(props: { inline?: boolean } = {}) {
   }
   const longv = () => (state.long.count === undefined ? na() : `${time(state.long.block) ?? na()}/${state.long.count}`)
   const navv = () => (state.nav.pending ? "..." : (time(state.nav.dur) ?? na()))
-  const toggleFocus = async () => {
-    if (!platform.setForceFocus) return
-    const enabled = !state.focus
-    try {
-      await platform.setForceFocus(enabled)
-    } catch {
-      await platform.setForceFocus(false).catch(() => undefined)
-      return
+  const focusGeneration = ++focusDebugGeneration
+  const currentFocusGeneration = () => focusGeneration === focusDebugGeneration
+  let disposed = false
+  let focusTarget = false
+  let focusApplied = false
+  let focusUncertain = false
+  let focusEnableFailed = false
+  let focusTask: Promise<void> | undefined
+  let focusRetry: ReturnType<typeof setTimeout> | undefined
+  let focusRetryDelay = 250
+  let focusDisposeRetries = 0
+  const applyFocus = async (enabled: boolean, attempts = enabled ? 1 : 2) => {
+    for (let attempt = 0; attempt < attempts; attempt++) {
+      if (!currentFocusGeneration()) return false
+      const changed = await platform.setForceFocus?.(enabled).then(
+        () => true,
+        () => false,
+      )
+      if (changed) return true
     }
-    setState("focus", enabled)
+    return false
+  }
+  const scheduleFocusRetry = () => {
+    if (!currentFocusGeneration() || focusRetry !== undefined) return false
+    if (disposed && focusDisposeRetries >= 3) return false
+    if (disposed) focusDisposeRetries++
+    const delay = focusRetryDelay
+    focusRetryDelay = Math.min(focusRetryDelay * 2, 4_000)
+    focusRetry = setTimeout(() => {
+      focusRetry = undefined
+      if (!currentFocusGeneration()) return
+      syncFocus()
+    }, delay)
+    return true
+  }
+  const syncFocus = () => {
+    if (!currentFocusGeneration() || !platform.setForceFocus || focusTask || focusRetry !== undefined) return
+    if (!disposed) setState("focusPending", true)
+    focusTask = (async () => {
+      while (focusUncertain || focusApplied !== focusTarget) {
+        const enabled = focusUncertain ? false : focusTarget
+        const changed = await applyFocus(enabled)
+        if (!currentFocusGeneration()) return
+        if (!changed) {
+          focusApplied = true
+          focusUncertain = true
+          if (!disposed) setState("focus", true)
+          if (enabled) {
+            focusEnableFailed = true
+            continue
+          }
+          scheduleFocusRetry()
+          return
+        }
+        focusApplied = enabled
+        focusUncertain = false
+        if (!disposed) setState("focus", enabled)
+        if (!enabled && focusEnableFailed) {
+          focusEnableFailed = false
+          if (focusTarget) {
+            scheduleFocusRetry()
+            return
+          }
+        }
+        focusEnableFailed = false
+        focusRetryDelay = 250
+      }
+      if (!disposed) setState("focusPending", false)
+    })().finally(() => {
+      focusTask = undefined
+      if (!currentFocusGeneration()) return
+      if ((focusUncertain || focusApplied !== focusTarget) && focusRetry === undefined) {
+        if (!disposed || focusDisposeRetries < 3) syncFocus()
+      }
+    })
+  }
+  const toggleFocus = () => {
+    if (!platform.setForceFocus || state.focusPending) return
+    focusTarget = !focusTarget
+    syncFocus()
   }
 
+  onMount(() => {
+    if (!platform.setForceFocus) return
+    focusApplied = true
+    focusUncertain = true
+    syncFocus()
+  })
+
   onCleanup(() => {
-    if (state.focus) void platform.setForceFocus?.(false).catch(() => undefined)
+    disposed = true
+    focusTarget = false
+    if (focusRetry !== undefined) {
+      clearTimeout(focusRetry)
+      focusRetry = undefined
+    }
+    syncFocus()
   })
 
   let prev = ""
@@ -547,7 +635,7 @@ export function DebugBar(props: { inline?: boolean } = {}) {
           wide={!platform.setForceFocus}
         />
         {platform.setForceFocus && (
-          <FocusCell active={state.focus} inline={props.inline} onClick={() => void toggleFocus()} />
+          <FocusCell active={state.focus} pending={state.focusPending} inline={props.inline} onClick={toggleFocus} />
         )}
       </div>
     </aside>
