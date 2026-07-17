@@ -47,6 +47,16 @@ export function createPromptInputV2Store(input: PromptInputV2StoreInput) {
         setStore()("cursor", content.length)
       })
     },
+    insertText(content: string) {
+      if (!content) return
+      const prompt = store().prompt
+      const length = prompt.reduce((total, part) => total + ("content" in part ? part.content.length : 0), 0)
+      const cursor = Math.max(0, Math.min(store().cursor ?? length, length))
+      batch(() => {
+        setStore()("prompt", insertPromptText(prompt, cursor, content))
+        setStore()("cursor", cursor + content.length)
+      })
+    },
     reset() {
       batch(() => {
         setStore()("prompt", [{ type: "text", content: "", start: 0, end: 0 }])
@@ -106,8 +116,40 @@ function insertMention(
       { type: "text" as const, content: ` ${after}`, start: 0, end: 0 },
     ]
   })
+  return withOffsets(parts)
+}
+
+function insertPromptText(prompt: PromptInputV2Prompt, cursor: number, content: string): PromptInputV2Prompt {
+  let position = 0
+  let inserted = false
+  const text = { type: "text" as const, content, start: 0, end: 0 }
+  const parts = prompt.flatMap<PromptInputV2Prompt[number]>((part) => {
+    if (inserted) return [part]
+    if (part.type === "image") {
+      if (cursor > position) return [part]
+      inserted = true
+      return [text, part]
+    }
+
+    const start = position
+    position += part.content.length
+    if (part.type === "text" && cursor >= start && cursor <= position) {
+      inserted = true
+      const before = part.content.slice(0, cursor - start)
+      const after = part.content.slice(cursor - start)
+      return [{ ...part, content: before + content + after }]
+    }
+    if (cursor > start) return [part]
+    inserted = true
+    return [text, part]
+  })
+  if (!inserted) parts.push(text)
+  return withOffsets(parts)
+}
+
+function withOffsets(prompt: PromptInputV2Prompt): PromptInputV2Prompt {
   let offset = 0
-  return parts.map((part) => {
+  return prompt.map((part) => {
     if (part.type === "image") return part
     const next = { ...part, start: offset, end: offset + part.content.length }
     offset = next.end

@@ -5,14 +5,14 @@ import { ButtonV2 } from "@opencode-ai/ui/v2/button-v2"
 import { Icon } from "@opencode-ai/ui/v2/icon"
 import { KeybindV2 } from "@opencode-ai/ui/v2/keybind-v2"
 import { TooltipV2 } from "@opencode-ai/ui/v2/tooltip-v2"
-import type { Prompt, ReferenceInfo } from "@opencode-ai/sdk/v2/client"
+import type { ReferenceInfo } from "@opencode-ai/sdk/v2/client"
 import { createEffect, createMemo, on, Show } from "solid-js"
 import { ModelSelectorPopoverV2 } from "@/components/dialog-select-model"
 import { DialogSelectModelUnpaidV2 } from "@/components/dialog-select-model-unpaid-v2"
 import type { PromptInputProps } from "@/components/prompt-input/contracts"
 import { normalizePromptHistoryEntry, promptLength, type PromptHistoryComment } from "@/components/prompt-input/history"
 import { createPersistedPromptInputHistory } from "@/components/prompt-input/history-store"
-import { promptDesignPlaceholder, promptPlaceholder } from "@/components/prompt-input/placeholder"
+import { promptPlaceholder } from "@/components/prompt-input/placeholder"
 import { createPromptSubmit } from "@/components/prompt-input/submit"
 import { selectionFromLines, type SelectedLineRange, useFile } from "@/context/file"
 import { useComments } from "@/context/comments"
@@ -58,6 +58,24 @@ export function PromptInputV2Composer(props: PromptInputV2ComposerProps) {
       <PromptInputV2
         controller={props.controller}
         class={props.class}
+        labels={{
+          emptyResults: language.t("prompt.popover.emptyResults"),
+          commands: language.t("prompt.menu.commands"),
+          dropFiles: language.t("prompt.dropzone.label"),
+          prompt: language.t("prompt.mode.normal"),
+          removeAttachment: language.t("prompt.attachment.remove"),
+          placeholderNormal: language.t("prompt.placeholder.simple"),
+          placeholderShell: language.t("prompt.placeholder.shell", { example: "git status" }),
+          addFiles: language.t("prompt.menu.addImagesAndFiles"),
+          imagesAndFiles: language.t("prompt.menu.imagesAndFiles"),
+          context: language.t("prompt.menu.context"),
+          shellCommand: language.t("prompt.menu.shellCommand"),
+          chooseAgent: language.t("command.agent.cycle"),
+          chooseModel: language.t("command.model.choose"),
+          chooseVariant: language.t("command.model.variant.cycle"),
+          send: language.t("prompt.action.send"),
+          stop: language.t("prompt.action.stop"),
+        }}
         modelControl={
           <PromptInputV2ModelControl
             loading={props.controller.model.loading}
@@ -201,7 +219,6 @@ export function usePromptInputV2Controller(props: PromptInputV2ControllerProps):
       t: (key, params) => language.t(key as Parameters<typeof language.t>[0], params as never),
     }),
   )
-  const designPlaceholder = () => promptDesignPlaceholder(mode(), placeholder())
 
   const historyComments = () => {
     const byID = new Map(comments.all().map((item) => [`${item.file}\n${item.id}`, item] as const))
@@ -442,7 +459,7 @@ export function usePromptInputV2Controller(props: PromptInputV2ControllerProps):
       getPathForFile: platform.getPathForFile,
     },
     view: {
-      placeholder: designPlaceholder,
+      placeholder,
       agent:
         props.controls.agents.visible && props.controls.agents.options.length > 0
           ? {

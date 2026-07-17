@@ -1,4 +1,4 @@
-import { createEffect, createMemo, For, Show, type Accessor, type JSX } from "solid-js"
+import { createEffect, createMemo, For, Show, type JSX } from "solid-js"
 import { FileIcon } from "@opencode-ai/ui/file-icon"
 import { Icon } from "@opencode-ai/ui/icon"
 import { IconButton } from "@opencode-ai/ui/icon-button"
@@ -32,17 +32,57 @@ export type {
 
 export type PromptInputV2Mode = "normal" | "shell"
 
+export type PromptInputV2Labels = {
+  emptyResults: string
+  commands: string
+  dropFiles: string
+  prompt: string
+  removeAttachment: string
+  placeholderNormal: string
+  placeholderShell: string
+  addFiles: string
+  imagesAndFiles: string
+  context: string
+  shellCommand: string
+  chooseAgent: string
+  chooseModel: string
+  chooseVariant: string
+  send: string
+  stop: string
+}
+
+const defaultLabels: PromptInputV2Labels = {
+  emptyResults: "No matching items",
+  commands: "Commands",
+  dropFiles: "Drop files to attach",
+  prompt: "Prompt",
+  removeAttachment: "Remove attachment",
+  placeholderNormal: "Ask anything, / for commands, @ for context...",
+  placeholderShell: "Enter shell command...",
+  addFiles: "Add images and files",
+  imagesAndFiles: "Images and files",
+  context: "Context",
+  shellCommand: "Shell command",
+  chooseAgent: "Choose agent",
+  chooseModel: "Choose model",
+  chooseVariant: "Choose model variant",
+  send: "Send",
+  stop: "Stop",
+}
+
 export type PromptInputV2Props = {
   controller: PromptInputV2Interaction
   disabled?: boolean
   readOnly?: boolean
   class?: string
   modelControl?: JSX.Element
+  labels?: Partial<PromptInputV2Labels>
 }
 
 export function PromptInputV2(props: PromptInputV2Props) {
   const state = props.controller.state
   const view = props.controller.view
+  const label = <K extends keyof PromptInputV2Labels>(key: K) => props.labels?.[key] ?? defaultLabels[key]
   let editor: HTMLDivElement | undefined
   let localInput = false
   const updateCursor = () => {
@@ -82,14 +122,14 @@ export function PromptInputV2(props: PromptInputV2Props) {
       />
       <Show when={state.popover.type !== "closed"}>
         <PromptInputV2Popover
-          emptyLabel="No matching items"
+          emptyLabel={label("emptyResults")}
           items={props.controller.suggestions()}
           activeID={state.popover.type === "closed" ? undefined : state.popover.activeID}
           search={
             state.popover.type === "command-menu"
               ? {
                   value: state.popover.query,
-                  label: "Commands",
+                  label: label("commands"),
                   placeholder: "/",
                   onValueChange: props.controller.setQuery,
                   onKeyDown: props.controller.onKeyDown,
@@ -115,7 +155,7 @@ export function PromptInputV2(props: PromptInputV2Props) {
       >
         <Show when={state.drag === "active"}>
           <div class="pointer-events-none absolute inset-0 z-20 grid place-items-center rounded-xl bg-v2-background-bg-base/90 text-v2-text-text-base">
-            Drop files to attach
+            {label("dropFiles")}
           </div>
         </Show>
 
@@ -124,7 +164,7 @@ export function PromptInputV2(props: PromptInputV2Props) {
             attachments={props.controller.attachments()}
             comments={props.controller.comments()}
             activeCommentID={state.activeContextID}
-            removeLabel="Remove attachment"
+            removeLabel={label("removeAttachment")}
             onAttachmentClick={props.controller.openAttachment}
             onAttachmentRemove={(attachment) => props.controller.removeAttachment(attachment.id)}
             onCommentClick={(comment) => props.controller.toggleContext(comment.key)}
@@ -142,14 +182,16 @@ export function PromptInputV2(props: PromptInputV2Props) {
             data-component="prompt-input"
             role="textbox"
             aria-multiline="true"
-            aria-label="Prompt"
+            aria-label={label("prompt")}
             contenteditable={!props.disabled && !props.readOnly}
             autocapitalize={state.mode === "normal" ? "sentences" : "off"}
             autocorrect={state.mode === "normal" ? "on" : "off"}
             spellcheck={state.mode === "normal"}
             // @ts-expect-error
             autocomplete="off"
-            class="relative z-10 block min-h-[60px] max-h-[180px] w-full overflow-y-auto whitespace-pre-wrap bg-transparent px-4 pt-4 pb-2 text-[13px] font-[440] leading-5 text-v2-text-text-base focus:outline-none empty:before:content-['\200B'] [&_[data-mention=file]]:text-syntax-property [&_[data-mention=agent]]:text-syntax-type [&_[data-mention=reference]]:text-syntax-keyword"
+            class={
+              "relative z-10 block min-h-[60px] max-h-[180px] w-full overflow-y-auto whitespace-pre-wrap bg-transparent px-4 pt-4 pb-2 text-[13px] font-[440] leading-5 text-v2-text-text-base focus:outline-none empty:before:content-['\\200B'] [&_[data-mention=file]]:text-syntax-property [&_[data-mention=agent]]:text-syntax-type [&_[data-mention=reference]]:text-syntax-keyword"
+            }
             classList={{ "font-mono!": state.mode === "shell", "opacity-50": props.disabled }}
             onInput={(event) => {
               const cursor = promptInputV2Cursor(event.currentTarget)
@@ -177,7 +219,7 @@ export function PromptInputV2(props: PromptInputV2Props) {
               classList={{ "font-mono!": state.mode === "shell" }}
             >
               {view.placeholder?.() ??
-                (state.mode === "shell" ? "Enter shell command..." : "Ask anything, / for commands, @ for context...")}
+                (state.mode === "shell" ? label("placeholderShell") : label("placeholderNormal"))}
             </div>
           </Show>
         </div>
@@ -191,13 +233,13 @@ export function PromptInputV2(props: PromptInputV2Props) {
           >
             <PromptInputV2AddMenu
               disabled={state.mode === "shell"}
-              title="Add images and files"
+              title={label("addFiles")}
               keybind={["Mod", "U"]}
-              attachLabel="Images and files"
+              attachLabel={label("imagesAndFiles")}
               attachShortcut="Mod+U"
-              commandsLabel="Commands"
-              contextLabel="Context"
-              shellLabel="Shell command"
+              commandsLabel={label("commands")}
+              contextLabel={label("context")}
+              shellLabel={label("shellCommand")}
               onAttach={props.controller.attach}
               onCommands={props.controller.openCommands}
               onContext={props.controller.openContext}
@@ -205,7 +247,11 @@ export function PromptInputV2(props: PromptInputV2Props) {
             />
             <Show when={view.agent}>
               {(control) => (
-                <PromptInputV2ConfiguredSelect title="Choose agent" keybind={["Mod", "."]} control={control()} />
+                <PromptInputV2ConfiguredSelect
+                  title={label("chooseAgent")}
+                  keybind={["Mod", "."]}
+                  control={control()}
+                />
               )}
             </Show>
             <Show
@@ -214,7 +260,7 @@ export function PromptInputV2(props: PromptInputV2Props) {
                 <Show when={view.model}>
                   {(control) => (
                     <PromptInputV2ConfiguredSelect
-                      title="Choose model"
+                      title={label("chooseModel")}
                       keybind={["Mod", "M"]}
                       control={control()}
                       model
@@ -228,7 +274,7 @@ export function PromptInputV2(props: PromptInputV2Props) {
             <Show when={view.variant}>
               {(control) => (
                 <Show when={control().options().length > 1}>
-                  <PromptInputV2ConfiguredSelect title="Choose model variant" control={control()} />
+                  <PromptInputV2ConfiguredSelect title={label("chooseVariant")} control={control()} />
                 </Show>
               )}
             </Show>
@@ -237,8 +283,8 @@ export function PromptInputV2(props: PromptInputV2Props) {
             mode={state.mode}
             stopping={view.submit.stopping()}
             disabled={!props.controller.canSubmit()}
-            sendLabel="Send"
-            stopLabel="Stop"
+            sendLabel={label("send")}
+            stopLabel={label("stop")}
             onSubmit={props.controller.submit}
             onStop={props.controller.stop}
           />

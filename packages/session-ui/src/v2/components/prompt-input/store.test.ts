@@ -56,6 +56,43 @@ describe("prompt input v2 store", () => {
     expect(prompt.state.cursor).toBe(7)
   })
 
+  test("inserts text at the cursor without flattening mentions", () => {
+    const prompt = createPromptInputV2Store(
+      createStore<PromptInputV2PersistedState>({
+        prompt: [
+          { type: "text", content: "before ", start: 0, end: 7 },
+          { type: "file", path: "src/app.ts", content: "@src/app.ts", start: 7, end: 18 },
+          { type: "text", content: " after", start: 18, end: 24 },
+          {
+            type: "image",
+            id: "attachment-1",
+            filename: "notes.txt",
+            mime: "text/plain",
+            dataUrl: "data:text/plain;base64,",
+          },
+        ],
+        cursor: 7,
+        context: { items: [] },
+      }),
+    )
+
+    prompt.insertText("pasted\n")
+
+    expect(prompt.state.prompt).toEqual([
+      { type: "text", content: "before pasted\n", start: 0, end: 14 },
+      { type: "file", path: "src/app.ts", content: "@src/app.ts", start: 14, end: 25 },
+      { type: "text", content: " after", start: 25, end: 31 },
+      {
+        type: "image",
+        id: "attachment-1",
+        filename: "notes.txt",
+        mime: "text/plain",
+        dataUrl: "data:text/plain;base64,",
+      },
+    ])
+    expect(prompt.state.cursor).toBe(14)
+  })
+
   test("mutates context, attachments, and model through shared actions", () => {
     const prompt = createPromptStore()
     const context = { key: "file:src/index.ts", type: "file" as const, path: "src/index.ts" }
