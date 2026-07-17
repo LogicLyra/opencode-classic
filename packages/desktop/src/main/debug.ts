@@ -13,10 +13,11 @@ const focusableSelector = `
   [tabindex]:not([tabindex="-1"])
 `
 
-export async function setForceFocus(contents: WebContents, enabled: boolean) {
+export async function setForceFocus(contents: WebContents, enabled: unknown) {
+  const next = requireFocusDebugState(enabled)
   const debuggerApi = contents.debugger
   if (!debuggerApi.isAttached()) {
-    if (!enabled) {
+    if (!next) {
       focusDebuggerOwners.delete(contents)
       forcedFocusNodes.delete(contents)
       return
@@ -29,7 +30,7 @@ export async function setForceFocus(contents: WebContents, enabled: boolean) {
     })
   }
 
-  if (!enabled) {
+  if (!next) {
     await Promise.allSettled(
       (forcedFocusNodes.get(contents) ?? []).map((nodeId) =>
         debuggerApi.sendCommand("CSS.forcePseudoState", {
@@ -64,6 +65,11 @@ export async function setForceFocus(contents: WebContents, enabled: boolean) {
       }),
     ),
   )
+}
+
+export function requireFocusDebugState(value: unknown) {
+  if (typeof value !== "boolean") throw new TypeError("Focus debug state must be a boolean")
+  return value
 }
 
 function readDocumentNodeId(value: unknown) {

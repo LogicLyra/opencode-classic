@@ -184,7 +184,12 @@ export function DebugBar(props: { inline?: boolean } = {}) {
   const toggleFocus = async () => {
     if (!platform.setForceFocus) return
     const enabled = !state.focus
-    await platform.setForceFocus(enabled)
+    try {
+      await platform.setForceFocus(enabled)
+    } catch {
+      await platform.setForceFocus(false).catch(() => undefined)
+      return
+    }
     setState("focus", enabled)
   }
 

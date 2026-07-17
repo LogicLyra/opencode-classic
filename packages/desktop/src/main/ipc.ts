@@ -84,7 +84,7 @@ export function registerIpcHandlers(deps: Deps) {
   handleTrusted("updater-install", () => deps.updater.install())
   handleTrusted("set-background-color", (_event: IpcMainInvokeEvent, color: string) => deps.setBackgroundColor(color))
   handleTrusted("export-debug-logs", () => deps.exportDebugLogs())
-  handleTrusted("set-force-focus", (event: IpcMainInvokeEvent, enabled: boolean) =>
+  handleTrusted("set-force-focus", (event: IpcMainInvokeEvent, enabled: unknown) =>
     setForceFocus(event.sender, enabled),
   )
   handleTrusted("record-fatal-renderer-error", (_event: IpcMainInvokeEvent, error: FatalRendererError) =>
