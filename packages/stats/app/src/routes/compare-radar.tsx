@@ -86,10 +86,26 @@ export function ComparisonRadar(props: ComparisonRadarProps) {
             <For each={series()}>
               {(model) => (
                 <g data-slot="compare-radar-series" style={{ color: model.color }}>
-                  <polygon data-slot="compare-radar-area" points={radarSeriesPolygon(model.scores)} />
+                  <Show when={radarSeriesPolygon(model.scores)}>
+                    {(points) => <polygon data-slot="compare-radar-area" points={points()} />}
+                  </Show>
+                  <Show when={!radarSeriesPolygon(model.scores)}>
+                    <For each={radarSeriesConnections(model.scores)}>
+                      {(connection) => (
+                        <line
+                          data-slot="compare-radar-line"
+                          x1={connection.start.x}
+                          y1={connection.start.y}
+                          x2={connection.end.x}
+                          y2={connection.end.y}
+                        />
+                      )}
+                    </For>
+                  </Show>
                   <For each={model.scores}>
                     {(score, index) => {
-                      const point = () => radarPoint(index(), axes().length, score ?? 0)
+                      if (score === undefined) return null
+                      const point = () => radarPoint(index(), axes().length, score)
                       return (
                         <>
                           <circle data-slot="compare-radar-point" cx={point().x} cy={point().y} r="0.95" />
@@ -324,11 +340,26 @@ function radarPolygonPoints(count: number, score: number) {
     .join(" ")
 }
 
-function radarSeriesPolygon(scores: (number | undefined)[]) {
+export function radarSeriesPolygon(scores: (number | undefined)[]) {
+  if (!scores.every((score): score is number => score !== undefined)) return undefined
   return scores
-    .map((score, index) => radarPoint(index, scores.length, score ?? 0))
+    .map((score, index) => radarPoint(index, scores.length, score))
     .map((point) => `${point.x},${point.y}`)
     .join(" ")
+}
+
+function radarSeriesConnections(scores: (number | undefined)[]) {
+  return scores.flatMap((score, index) => {
+    const nextIndex = (index + 1) % scores.length
+    const next = scores[nextIndex]
+    if (score === undefined || next === undefined) return []
+    return [
+      {
+        start: radarPoint(index, scores.length, score),
+        end: radarPoint(nextIndex, scores.length, next),
+      },
+    ]
+  })
 }
 
 function radarAxisStyle(index: number, count: number) {
