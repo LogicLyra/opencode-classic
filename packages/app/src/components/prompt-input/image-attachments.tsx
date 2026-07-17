@@ -31,9 +31,9 @@ const imageClassV2 = "w-[58px] h-[46px] rounded-[6px] object-cover"
 const imageHairlineClassV2 =
   "absolute inset-0 rounded-[6px] shadow-[inset_0_0_0_0.5px_var(--v2-border-border-base)] pointer-events-none"
 const removeClass =
-  "absolute -top-1.5 -right-1.5 size-5 rounded-full bg-surface-raised-stronger-non-alpha border border-border-base flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-surface-raised-base-hover"
+  "absolute -top-1.5 -right-1.5 z-10 size-5 rounded-full bg-surface-raised-stronger-non-alpha border border-border-base flex items-center justify-center opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-border-focus transition-opacity hover:bg-surface-raised-base-hover after:absolute after:-inset-2 after:content-[''] [@media(hover:none)]:size-6 [@media(hover:none)]:opacity-100 [@media(any-pointer:coarse)]:size-6 [@media(any-pointer:coarse)]:opacity-100"
 const removeClassV2 =
-  "absolute -top-1 -right-1 size-4 rounded-full bg-v2-icon-icon-muted outline-solid outline-1 outline-v2-icon-icon-contrast flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+  "absolute -top-1 -right-1 z-10 size-4 rounded-full bg-v2-icon-icon-muted outline-solid outline-1 outline-v2-icon-icon-contrast flex items-center justify-center opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 focus-visible:outline-2 focus-visible:outline-v2-border-border-focus transition-opacity after:absolute after:-inset-2 after:content-[''] [@media(hover:none)]:size-6 [@media(hover:none)]:opacity-100 [@media(any-pointer:coarse)]:size-6 [@media(any-pointer:coarse)]:opacity-100"
 const nameClass = "absolute bottom-0 left-0 right-0 px-1 py-0.5 bg-black/50 rounded-b-md"
 
 export const PromptImageAttachments: Component<PromptImageAttachmentsProps> = (props) => {
@@ -70,7 +70,7 @@ export const PromptImageAttachments: Component<PromptImageAttachmentsProps> = (p
                     type="button"
                     onClick={() => props.onRemoveComment?.(item)}
                     class={removeClassV2}
-                    aria-label={props.removeLabel}
+                    aria-label={`${props.removeLabel}: ${item.path}`}
                   >
                     <IconV2 name="outline-xmark" class="text-v2-icon-icon-contrast" />
                   </button>
@@ -99,12 +99,18 @@ export const PromptImageAttachments: Component<PromptImageAttachmentsProps> = (p
                     </Show>
                   }
                 >
-                  <img
-                    src={attachment.dataUrl}
-                    alt={attachment.filename}
-                    class={props.newLayoutDesigns ? imageClassV2 : imageClass}
+                  <button
+                    type="button"
+                    aria-label={attachment.filename}
+                    class={
+                      props.newLayoutDesigns
+                        ? "block rounded-[6px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-border-border-focus"
+                        : "block rounded-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus"
+                    }
                     onClick={() => props.onOpen(attachment)}
-                  />
+                  >
+                    <img src={attachment.dataUrl} alt="" class={props.newLayoutDesigns ? imageClassV2 : imageClass} />
+                  </button>
                 </Show>
               )
               const name = () => (
@@ -117,7 +123,7 @@ export const PromptImageAttachments: Component<PromptImageAttachmentsProps> = (p
                   type="button"
                   onClick={() => props.onRemove(attachment.id)}
                   class={props.newLayoutDesigns ? removeClassV2 : removeClass}
-                  aria-label={props.removeLabel}
+                  aria-label={`${props.removeLabel}: ${attachment.filename}`}
                 >
                   <Show when={props.newLayoutDesigns} fallback={<Icon name="close" class="size-3 text-text-weak" />}>
                     <IconV2 name="outline-xmark" class="text-v2-icon-icon-contrast" />

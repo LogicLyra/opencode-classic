@@ -7,7 +7,9 @@
   min-width: 160px;
   max-width: 160px;
   padding: 8px;
+  border: 0;
   border-radius: 6px;
+  text-align: left;
   background: var(--v2-overlay-simple-overlay-hover);
   box-shadow: inset 0 0 0 0.5px var(--v2-border-border-base);
   cursor: default;
@@ -28,6 +30,11 @@
 
   &[data-clickable] {
     cursor: pointer;
+
+    &:focus-visible {
+      outline: 2px solid var(--v2-border-border-focus);
+      outline-offset: 2px;
+    }
   }
 
   [data-slot="attachment-card-v2-title"],

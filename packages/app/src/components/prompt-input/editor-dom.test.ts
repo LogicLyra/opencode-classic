@@ -96,4 +96,40 @@ describe("prompt-input editor dom", () => {
 
     container.remove()
   })
+
+  test("setCursorPosition treats V2 data-mention pills as atomic first-child nodes", () => {
+    const container = document.createElement("div")
+    const pill = document.createElement("span")
+    pill.dataset.mention = "file"
+    pill.textContent = "@file"
+    container.appendChild(pill)
+    container.appendChild(document.createTextNode("tail"))
+    document.body.appendChild(container)
+
+    setCursorPosition(container, 0)
+    expect(getCursorPosition(container)).toBe(0)
+
+    setCursorPosition(container, 5)
+    expect(getCursorPosition(container)).toBe(5)
+
+    container.remove()
+  })
+
+  test("routes V2 block cursors through the structured editor coordinate model", () => {
+    const form = document.createElement("form")
+    form.dataset.component = "prompt-input-v2"
+    const container = document.createElement("div")
+    const first = document.createElement("div")
+    const second = document.createElement("div")
+    first.textContent = "foo"
+    second.textContent = "bar"
+    container.append(first, second)
+    form.append(container)
+    document.body.append(form)
+
+    setCursorPosition(container, 4)
+
+    expect(getCursorPosition(container)).toBe(4)
+    form.remove()
+  })
 })

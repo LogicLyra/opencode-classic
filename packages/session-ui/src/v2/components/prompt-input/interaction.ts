@@ -18,8 +18,10 @@ import {
   type PromptInputV2InteractionCommand,
   type PromptInputV2InteractionEvent,
 } from "./machine"
+import { promptInputV2EditorCursor, setPromptInputV2EditorCursor } from "./cursor"
 
 export type PromptInputV2SelectControl = {
+  visible?: Accessor<boolean>
   options: Accessor<PromptInputV2Option[]>
   current: Accessor<string>
   onSelect: (id: string) => void
@@ -70,6 +72,7 @@ export function createPromptInputV2Controller(input: {
 }) {
   let editor: HTMLElement | undefined
   let fileInput: HTMLInputElement | undefined
+  let commandSearch: HTMLInputElement | undefined
   const draft = createPromptInputV2Store(input.store)
   const [state, setState] = input.state ?? createPromptInputV2State()
   if (input.identity) {
@@ -142,6 +145,18 @@ export function createPromptInputV2Controller(input: {
       draft.setText(command.value)
       return
     }
+    if (command.type === "draft.insertText") {
+      draft.insertText(command.value)
+      return
+    }
+    if (command.type === "draft.prependText") {
+      draft.prependText(command.value)
+      return
+    }
+    if (command.type === "draft.clearText") {
+      draft.clearText()
+      return
+    }
     if (command.type === "mention.add") {
       if (command.item.mention) draft.addMention(command.item.mention)
       return
@@ -155,7 +170,15 @@ export function createPromptInputV2Controller(input: {
       if (item) dispatch({ type: "popover.select", item })
       return
     }
-    if (command.type === "focus.editor") requestAnimationFrame(() => editor?.focus())
+    if (command.type === "focus.editor") {
+      requestAnimationFrame(() => {
+        editor?.focus()
+        setPromptInputV2EditorCursor(editor, draft.state.cursor ?? promptLength(draft.state.prompt))
+      })
+    }
+    if (command.type === "focus.command-search") {
+      requestAnimationFrame(() => commandSearch?.focus())
+    }
   }
 
   function dispatch(event: PromptInputV2InteractionEvent) {
@@ -168,15 +191,17 @@ export function createPromptInputV2Controller(input: {
       if (result.state.mode === "normal") input.view.shell?.onClose()
     }
     if (event.type === "popover.select") {
+      const previousFocus = commandSearch
       const action = input.onSuggestionSelect?.(event.item)
-      if (!action) return result.handled
-      if (event.item.kind === "command") {
-        draft.setPrompt(
-          draft.state.prompt.filter((part): part is PromptInputV2Attachment => part.type === "image"),
-          0,
-        )
+      if (action) {
+        if (event.item.kind === "command" && !event.item.commandMode) draft.clearText()
+        action()
       }
-      action()
+      if (event.item.kind === "command" && event.item.commandMode === "execute") {
+        restoreFocusIfStranded(previousFocus)
+      }
+      if (action) return result.handled
+      if (event.item.kind === "command" && event.item.commandMode !== "execute") restoreFocus()
     }
     return result.handled
   }
@@ -242,7 +267,15 @@ export function createPromptInputV2Controller(input: {
   const restoreFocus = (cursor = draft.state.cursor ?? promptLength(draft.state.prompt)) => {
     requestAnimationFrame(() => {
       editor?.focus()
-      setEditorCursor(editor, cursor)
+      setPromptInputV2EditorCursor(editor, cursor)
+    })
+  }
+  const restoreFocusIfStranded = (previousFocus?: HTMLElement) => {
+    requestAnimationFrame(() => {
+      const active = document.activeElement
+      if (active && active !== document.body && active !== previousFocus && active.isConnected) return
+      editor?.focus()
+      setPromptInputV2EditorCursor(editor, draft.state.cursor ?? promptLength(draft.state.prompt))
     })
   }
 
@@ -257,7 +290,7 @@ export function createPromptInputV2Controller(input: {
     const selection = window.getSelection()
     if (!selection?.isCollapsed || !editor.contains(selection.anchorNode)) return false
     const text = draft.state.prompt.map((part) => ("content" in part ? part.content : "")).join("")
-    if (!canNavigateHistory(direction, text, editorCursor(editor), state.historyIndex >= 0)) return false
+    if (!canNavigateHistory(direction, text, promptInputV2EditorCursor(editor), state.historyIndex >= 0)) return false
     const entries = input.history.entries(state.mode)
     if (direction === "up") {
       if (entries.length === 0 || state.historyIndex >= entries.length - 1) return false
@@ -296,6 +329,9 @@ export function createPromptInputV2Controller(input: {
     },
     parts() {
       return draft.state.prompt
+    },
+    cursor() {
+      return draft.state.cursor
     },
     addPart,
     contextItem(id: string) {
@@ -336,7 +372,7 @@ export function createPromptInputV2Controller(input: {
     restoreFocus,
     onInput(value: string, prompt?: PromptInputV2PersistedState["prompt"], cursor?: number) {
       if (prompt) draft.setPrompt(prompt, cursor)
-      dispatch({ type: "input.changed", value, persist: !prompt })
+      dispatch({ type: "input.changed", value, cursor, persist: !prompt })
     },
     onCursor(cursor: number) {
       draft.setCursor(cursor)
@@ -419,6 +455,9 @@ export function createPromptInputV2Controller(input: {
     setFileInput(element: HTMLInputElement) {
       fileInput = element
     },
+    setCommandSearch(element: HTMLInputElement | undefined) {
+      commandSearch = element
+    },
     addAttachments(files: File[]) {
       if (attachments) void attachments.addAttachments(files)
     },
@@ -445,34 +484,4 @@ function clonePrompt(prompt: PromptInputV2PersistedState["prompt"]): PromptInput
 
 function promptLength(prompt: PromptInputV2PersistedState["prompt"]) {
   return prompt.reduce((length, part) => length + ("content" in part ? part.content.length : 0), 0)
-}
-
-function editorCursor(editor: HTMLElement) {
-  const selection = window.getSelection()
-  if (!selection?.rangeCount || !editor.contains(selection.anchorNode)) return editor.textContent?.length ?? 0
-  const range = selection.getRangeAt(0).cloneRange()
-  range.selectNodeContents(editor)
-  range.setEnd(selection.anchorNode!, selection.anchorOffset)
-  return range.toString().length
-}
-
-function setEditorCursor(editor: HTMLElement | undefined, cursor: number) {
-  if (!editor) return
-  const walker = document.createTreeWalker(editor, NodeFilter.SHOW_TEXT)
-  let remaining = cursor
-  let node = walker.nextNode()
-  while (node) {
-    const length = node.textContent?.length ?? 0
-    if (remaining <= length) {
-      const range = document.createRange()
-      range.setStart(node, remaining)
-      range.collapse(true)
-      const selection = window.getSelection()
-      selection?.removeAllRanges()
-      selection?.addRange(range)
-      return
-    }
-    remaining -= length
-    node = walker.nextNode()
-  }
 }

@@ -48,6 +48,7 @@ test("shows the V2 thinking level control while relevant", async ({ page }) => {
       },
     ],
     pageMessages: () => ({ items: [] }),
+    findFiles: () => [],
   })
   await page.addInitScript(() => {
     localStorage.setItem("settings.v3", JSON.stringify({ general: { newLayoutDesigns: true } }))
@@ -56,7 +57,7 @@ test("shows the V2 thinking level control while relevant", async ({ page }) => {
   await page.goto(`/${base64Encode(directory)}/session/${sessionID}`)
   const composer = page.locator('[data-component="prompt-input-v2"]')
   const input = composer.locator('[data-component="prompt-input"]')
-  const control = composer.locator('button[title="Choose model variant"]')
+  const control = composer.locator('[data-action="prompt-model-variant"]')
   await expectAppVisible(composer)
 
   await idleComposer(page)
@@ -76,9 +77,21 @@ test("shows the V2 thinking level control while relevant", async ({ page }) => {
 
   await idleComposer(page)
   await expect(control).toBeVisible()
+
+  await input.focus()
+  await page.keyboard.type("foo")
+  await page.keyboard.press("Shift+Enter")
+  await composer.getByRole("button", { name: "Add files and more" }).click()
+  await page.getByRole("menuitem", { name: /^Context\b/ }).click()
+  await expect.poll(() => input.evaluate((element) => element.textContent)).toBe("foo\n@")
+  await page.keyboard.type("x")
+  await expect.poll(() => input.evaluate((element) => element.textContent)).toBe("foo\n@x")
 })
 
 async function idleComposer(page: Page) {
   await page.mouse.move(0, 0)
-  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur())
+  await page.evaluate(() => {
+    const active = document.activeElement
+    if (active instanceof HTMLElement) active.blur()
+  })
 }
