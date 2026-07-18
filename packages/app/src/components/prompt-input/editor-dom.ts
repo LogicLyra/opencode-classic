@@ -1,4 +1,10 @@
+import { promptInputV2EditorCursor, setPromptInputV2EditorCursor } from "@opencode-ai/session-ui/v2/prompt-input/cursor"
+
 const MAX_BREAKS = 200
+
+function isV2Editor(parent: HTMLElement) {
+  return !!parent.closest('[data-component="prompt-input-v2"]')
+}
 
 export function createTextFragment(content: string): DocumentFragment {
   const fragment = document.createDocumentFragment()
@@ -43,6 +49,7 @@ export function getTextLength(node: Node): number {
 }
 
 export function getCursorPosition(parent: HTMLElement): number {
+  if (isV2Editor(parent)) return promptInputV2EditorCursor(parent)
   const selection = window.getSelection()
   if (!selection || selection.rangeCount === 0) return 0
   const range = selection.getRangeAt(0)
@@ -54,6 +61,10 @@ export function getCursorPosition(parent: HTMLElement): number {
 }
 
 export function setCursorPosition(parent: HTMLElement, position: number) {
+  if (isV2Editor(parent)) {
+    setPromptInputV2EditorCursor(parent, position)
+    return
+  }
   let remaining = position
   let node = parent.firstChild
   while (node) {

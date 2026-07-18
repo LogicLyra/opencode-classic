@@ -102,6 +102,7 @@ export const dict = {
   "dialog.provider.empty": "Nema pronađenih provajdera",
   "dialog.provider.group.popular": "Popularno",
   "dialog.provider.group.other": "Ostalo",
+  "dialog.provider.custom.label": "Prilagođeni pružalac kompatibilan s OpenAI",
   "dialog.provider.tag.recommended": "Preporučeno",
   "dialog.provider.opencode.note": "Kurirani modeli uključujući Claude, GPT, Gemini i druge",
   "dialog.provider.opencode.tagline": "Pouzdani optimizovani modeli",
@@ -122,6 +123,7 @@ export const dict = {
 
   "dialog.model.unpaid.freeModels.title": "Besplatni modeli koje obezbjeđuje OpenCode",
   "dialog.model.unpaid.addMore.title": "Dodaj još modela od popularnih provajdera",
+  "dialog.model.unpaid.viewMoreProviders": "Pogledaj još 70+ pružalaca",
 
   "dialog.provider.viewAll": "Prikaži više provajdera",
 
@@ -1036,6 +1038,9 @@ export const dict = {
   "session.question.progress": "{{current}} od {{total}} pitanja",
   "session.header.open.finder": "Finder",
   "session.header.open.fileExplorer": "File Explorer",
+  "session.header.reveal.finder": "Prikaži u Finderu",
+  "session.header.reveal.fileExplorer": "Prikaži u File Exploreru",
+  "session.header.reveal.containingFolder": "Otvori sadržavajuću mapu",
   "session.header.open.fileManager": "File Manager",
   "session.header.open.app.vscode": "VS Code",
   "session.header.open.app.cursor": "Cursor",

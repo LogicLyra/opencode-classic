@@ -102,6 +102,7 @@ export const dict = {
   "dialog.provider.empty": "Провайдеры не найдены",
   "dialog.provider.group.popular": "Популярные",
   "dialog.provider.group.other": "Другие",
+  "dialog.provider.custom.label": "Пользовательский провайдер, совместимый с OpenAI",
   "dialog.provider.tag.recommended": "Рекомендуемые",
   "dialog.provider.opencode.note": "Отобранные модели, включая Claude, GPT, Gemini и другие",
   "dialog.provider.opencode.tagline": "Надежные оптимизированные модели",
@@ -122,6 +123,7 @@ export const dict = {
 
   "dialog.model.unpaid.freeModels.title": "Бесплатные модели от OpenCode",
   "dialog.model.unpaid.addMore.title": "Добавьте больше моделей от популярных провайдеров",
+  "dialog.model.unpaid.viewMoreProviders": "Посмотреть ещё более 70 провайдеров",
 
   "dialog.provider.viewAll": "Показать больше провайдеров",
 
@@ -1039,6 +1041,9 @@ export const dict = {
   "session.question.progress": "{{current}} из {{total}} вопросов",
   "session.header.open.finder": "Finder",
   "session.header.open.fileExplorer": "Проводник",
+  "session.header.reveal.finder": "Показать в Finder",
+  "session.header.reveal.fileExplorer": "Показать в Проводнике",
+  "session.header.reveal.containingFolder": "Открыть содержащую папку",
   "session.header.open.fileManager": "Файловый менеджер",
   "session.header.open.app.vscode": "VS Code",
   "session.header.open.app.cursor": "Cursor",
