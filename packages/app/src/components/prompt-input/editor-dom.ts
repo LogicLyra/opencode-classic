@@ -1,4 +1,4 @@
-import { promptInputV2EditorCursor, setPromptInputV2EditorCursor } from "@opencode-ai/session-ui/v2/prompt-input"
+import { promptInputV2EditorCursor, setPromptInputV2EditorCursor } from "@opencode-ai/session-ui/v2/prompt-input/cursor"
 
 const MAX_BREAKS = 200
 

@@ -23,8 +23,6 @@ import type {
 import type { PromptInputV2Interaction, PromptInputV2SelectControl } from "./interaction"
 import { promptInputV2EditorCursor, promptInputV2EditorSegments, setPromptInputV2EditorCursor } from "./cursor"
 
-export { promptInputV2EditorCursor, setPromptInputV2EditorCursor } from "./cursor"
-
 export type {
   PromptInputV2Attachment,
   PromptInputV2Comment,
