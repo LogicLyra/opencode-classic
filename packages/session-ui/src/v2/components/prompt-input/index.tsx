@@ -1,4 +1,4 @@
-import { createEffect, createMemo, For, Show, type JSX } from "solid-js"
+import { createEffect, createMemo, For, Show, untrack, type JSX } from "solid-js"
 import { FileIcon } from "@opencode-ai/ui/file-icon"
 import { Icon } from "@opencode-ai/ui/icon"
 import { IconButton } from "@opencode-ai/ui/icon-button"
@@ -21,6 +21,9 @@ import type {
   PromptInputV2Suggestion,
 } from "./types"
 import type { PromptInputV2Interaction, PromptInputV2SelectControl } from "./interaction"
+import { promptInputV2EditorCursor, promptInputV2EditorSegments, setPromptInputV2EditorCursor } from "./cursor"
+
+export { promptInputV2EditorCursor, setPromptInputV2EditorCursor } from "./cursor"
 
 export type {
   PromptInputV2Attachment,
@@ -87,7 +90,7 @@ export function PromptInputV2(props: PromptInputV2Props) {
   let localInput = false
   const updateCursor = () => {
     if (!editor || !window.getSelection()?.isCollapsed) return
-    props.controller.onCursor(promptInputV2Cursor(editor))
+    props.controller.onCursor(promptInputV2EditorCursor(editor))
   }
   const mode = createMemo(() => state.mode)
   const buttons = createMemo(() => ({
@@ -103,7 +106,11 @@ export function PromptInputV2(props: PromptInputV2Props) {
       localInput = false
       return
     }
-    renderPromptInputV2Editor(editor, parts)
+    renderPromptInputV2Editor(
+      editor,
+      parts,
+      untrack(() => props.controller.cursor()),
+    )
   })
 
   return (
@@ -177,7 +184,7 @@ export function PromptInputV2(props: PromptInputV2Props) {
             ref={(element) => {
               editor = element
               props.controller.setEditor(element)
-              renderPromptInputV2Editor(element, props.controller.parts())
+              renderPromptInputV2Editor(element, props.controller.parts(), props.controller.cursor())
             }}
             data-component="prompt-input"
             role="textbox"
@@ -194,7 +201,7 @@ export function PromptInputV2(props: PromptInputV2Props) {
             }
             classList={{ "font-mono!": state.mode === "shell", "opacity-50": props.disabled }}
             onInput={(event) => {
-              const cursor = promptInputV2Cursor(event.currentTarget)
+              const cursor = promptInputV2EditorCursor(event.currentTarget)
               const prompt = parsePromptInputV2Editor(event.currentTarget)
               const images = props.controller.parts().filter((part) => part.type === "image")
               localInput = true
@@ -245,7 +252,7 @@ export function PromptInputV2(props: PromptInputV2Props) {
               onContext={props.controller.openContext}
               onShell={props.controller.openShell}
             />
-            <Show when={view.agent}>
+            <Show when={view.agent?.()}>
               {(control) => (
                 <PromptInputV2ConfiguredSelect
                   title={label("chooseAgent")}
@@ -294,33 +301,37 @@ export function PromptInputV2(props: PromptInputV2Props) {
   )
 }
 
-function renderPromptInputV2Editor(editor: HTMLDivElement, prompt: PromptInputV2Prompt) {
+type PromptInputV2Mention = Extract<PromptInputV2Prompt[number], { type: "file" | "agent" }>
+const promptInputV2Mentions = new WeakMap<HTMLElement, PromptInputV2Mention>()
+
+function renderPromptInputV2Editor(editor: HTMLDivElement, prompt: PromptInputV2Prompt, cursor?: number) {
   const active = document.activeElement === editor
-  editor.replaceChildren(
-    ...prompt.flatMap<Node>((part) => {
-      if (part.type === "image") return []
-      if (part.type === "text") return [document.createTextNode(part.content)]
-      const mention = document.createElement("span")
-      mention.textContent = part.content
-      mention.contentEditable = "false"
-      mention.dataset.mention =
-        part.type === "file" && part.mime === "application/x-directory" ? "reference" : part.type
-      if (part.type === "agent") mention.dataset.name = part.name
-      if (part.type === "file") {
-        mention.dataset.path = part.path
-        if (part.mime) mention.dataset.mime = part.mime
-        if (part.filename) mention.dataset.filename = part.filename
-      }
-      return [mention]
-    }),
-  )
+  const nodes: Node[] = []
+  for (const part of prompt) {
+    if (part.type === "image") continue
+    if (part.type === "text") {
+      const previous = nodes.at(-1)
+      if (previous instanceof Text) previous.data += part.content
+      else nodes.push(document.createTextNode(part.content))
+      continue
+    }
+    const mention = document.createElement("span")
+    mention.textContent = part.content
+    mention.contentEditable = "false"
+    mention.dataset.mention =
+      part.type === "file" && part.mime === "application/x-directory" ? "reference" : part.type
+    if (part.type === "agent") mention.dataset.name = part.name
+    if (part.type === "file") {
+      mention.dataset.path = part.path
+      if (part.mime) mention.dataset.mime = part.mime
+      if (part.filename) mention.dataset.filename = part.filename
+    }
+    promptInputV2Mentions.set(mention, part)
+    nodes.push(mention)
+  }
+  editor.replaceChildren(...nodes)
   if (!active) return
-  const selection = window.getSelection()
-  const range = document.createRange()
-  range.selectNodeContents(editor)
-  range.collapse(false)
-  selection?.removeAllRanges()
-  selection?.addRange(range)
+  setPromptInputV2EditorCursor(editor, cursor)
 }
 
 function parsePromptInputV2Editor(editor: HTMLDivElement) {
@@ -337,49 +348,51 @@ function parsePromptInputV2Editor(editor: HTMLDivElement) {
   const mention = (element: HTMLElement) => {
     flush()
     const content = element.textContent ?? ""
+    const original = promptInputV2Mentions.get(element)
+    const start = position
+    const end = start + content.length
     if (element.dataset.mention === "agent") {
+      const agent = original?.type === "agent" ? original : undefined
       parts.push({
+        ...agent,
         type: "agent",
-        name: element.dataset.name ?? content.slice(1),
+        name: agent?.name ?? element.dataset.name ?? content.slice(1),
         content,
-        start: position,
-        end: position + content.length,
+        start,
+        end,
       })
-      position += content.length
+      position = end
       return
     }
+    const file = original?.type === "file" ? original : undefined
+    const source = file?.source
+      ? { ...file.source, text: { ...file.source.text, value: content, start, end } }
+      : undefined
     parts.push({
+      ...file,
       type: "file",
-      path: element.dataset.path ?? content.slice(1),
+      path: file?.path ?? element.dataset.path ?? content.slice(1),
       content,
-      start: position,
-      end: position + content.length,
+      start,
+      end,
       ...(element.dataset.mime ? { mime: element.dataset.mime } : {}),
       ...(element.dataset.filename ? { filename: element.dataset.filename } : {}),
+      ...(source ? { source } : {}),
     })
-    position += content.length
-  }
-  const visit = (node: Node) => {
-    if (node.nodeType === Node.TEXT_NODE) {
-      buffer += node.textContent ?? ""
-      return
-    }
-    if (!(node instanceof HTMLElement)) return
-    if (node.dataset.mention) {
-      mention(node)
-      return
-    }
-    if (node.tagName === "BR") {
-      buffer += "\n"
-      return
-    }
-    Array.from(node.childNodes).forEach(visit)
+    position = end
   }
 
-  Array.from(editor.childNodes).forEach((node, index, nodes) => {
-    visit(node)
-    if (node instanceof HTMLElement && ["DIV", "P"].includes(node.tagName) && index < nodes.length - 1) buffer += "\n"
-  })
+  for (const segment of promptInputV2EditorSegments(editor)) {
+    if (segment.kind === "text") {
+      buffer += segment.node.textContent ?? ""
+      continue
+    }
+    if (segment.kind === "break" || segment.kind === "block-boundary") {
+      buffer += "\n"
+      continue
+    }
+    mention(segment.element)
+  }
   flush()
   if (
     parts.every((part) => part.type === "text") &&
@@ -389,15 +402,6 @@ function parsePromptInputV2Editor(editor: HTMLDivElement) {
   }
   if (parts.length > 0) return parts
   return [{ type: "text" as const, content: "", start: 0, end: 0 }]
-}
-
-function promptInputV2Cursor(editor: HTMLDivElement) {
-  const selection = window.getSelection()
-  if (!selection?.rangeCount || !editor.contains(selection.anchorNode)) return editor.textContent?.length ?? 0
-  const range = selection.getRangeAt(0).cloneRange()
-  range.selectNodeContents(editor)
-  range.setEnd(selection.anchorNode!, selection.anchorOffset)
-  return range.toString().length
 }
 
 export function PromptInputV2Attachments(props: {

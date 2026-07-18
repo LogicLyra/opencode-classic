@@ -96,4 +96,28 @@ describe("prompt-input editor dom", () => {
 
     container.remove()
   })
+
+  test("routes V2 block, br, and sentinel cursors through the structured editor coordinate model", () => {
+    const form = document.createElement("form")
+    form.dataset.component = "prompt-input-v2"
+    const container = document.createElement("div")
+    const first = document.createElement("div")
+    const br = document.createElement("br")
+    const second = document.createElement("div")
+    first.textContent = "foo"
+    second.textContent = "bar"
+    container.append(first, br, second)
+    form.append(container)
+    document.body.append(form)
+
+    setCursorPosition(container, 4)
+    expect(getCursorPosition(container)).toBe(4)
+
+    // The trailing <div>bar</div> plus the empty-text fallback sentinel should
+    // round-trip to the end of the editor.
+    setCursorPosition(container, 8)
+    expect(getCursorPosition(container)).toBe(8)
+
+    form.remove()
+  })
 })

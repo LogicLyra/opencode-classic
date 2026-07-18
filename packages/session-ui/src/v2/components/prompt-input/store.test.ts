@@ -93,6 +93,72 @@ describe("prompt input v2 store", () => {
     expect(prompt.state.cursor).toBe(14)
   })
 
+  test("prepends commands and clears text without corrupting structured parts", () => {
+    const prompt = createPromptInputV2Store(
+      createStore<PromptInputV2PersistedState>({
+        prompt: [
+          { type: "text", content: " keep ", start: 0, end: 6 },
+          {
+            type: "file",
+            path: "resource://docs",
+            content: "@docs",
+            start: 6,
+            end: 11,
+            url: "resource://docs",
+            source: {
+              type: "resource",
+              clientName: "docs",
+              uri: "resource://docs",
+              text: { value: "@docs", start: 6, end: 11 },
+            },
+          },
+          { type: "text", content: " tail", start: 11, end: 16 },
+          {
+            type: "image",
+            id: "attachment-1",
+            filename: "notes.txt",
+            mime: "text/plain",
+            dataUrl: "data:text/plain;base64,",
+          },
+        ],
+        cursor: 16,
+        context: { items: [] },
+      }),
+    )
+
+    prompt.prependText("/review ")
+
+    expect(prompt.state.prompt[1]).toEqual({
+      type: "file",
+      path: "resource://docs",
+      content: "@docs",
+      start: 14,
+      end: 19,
+      url: "resource://docs",
+      source: {
+        type: "resource",
+        clientName: "docs",
+        uri: "resource://docs",
+        text: { value: "@docs", start: 14, end: 19 },
+      },
+    })
+    expect(prompt.state.cursor).toBe(24)
+
+    prompt.clearText()
+
+    expect(prompt.state.prompt).toEqual([
+      { type: "text", content: "", start: 0, end: 0 },
+      {
+        type: "image",
+        id: "attachment-1",
+        filename: "notes.txt",
+        mime: "text/plain",
+        dataUrl: "data:text/plain;base64,",
+      },
+    ])
+    expect(prompt.state.cursor).toBe(0)
+  })
+
   test("mutates context, attachments, and model through shared actions", () => {
     const prompt = createPromptStore()
     const context = { key: "file:src/index.ts", type: "file" as const, path: "src/index.ts" }
@@ -127,5 +193,72 @@ describe("prompt input v2 store", () => {
 
     expect(prompt.state.prompt).toEqual([{ type: "text", content: "", start: 0, end: 0 }])
     expect(prompt.state.cursor).toBe(0)
+  })
+
+  function createMentionStore(prompt: PromptInputV2PersistedState["prompt"], cursor: number) {
+    return createPromptInputV2Store(
+      createStore<PromptInputV2PersistedState>({ prompt, cursor, context: { items: [] } }),
+    )
+  }
+
+  test("addMention ignores earlier non-trigger @ text such as email addresses", () => {
+    const prompt = createMentionStore([{ type: "text", content: "foo@bar.com", start: 0, end: 11 }], 11)
+    const mention = { type: "file" as const, path: "b", content: "@b", start: 0, end: 0 }
+
+    prompt.addMention(mention)
+
+    expect(prompt.state.prompt).toEqual([
+      { type: "text", content: "foo@bar.com", start: 0, end: 11 },
+      { type: "file", path: "b", content: "@b", start: 11, end: 13 },
+      { type: "text", content: " ", start: 13, end: 14 },
+    ])
+    expect(prompt.state.cursor).toBe(14)
+  })
+
+  test("addMention inserts at a structured boundary and refreshes nested source offsets", () => {
+    const prompt = createMentionStore(
+      [
+        { type: "text", content: "see ", start: 0, end: 4 },
+        {
+          type: "file",
+          path: "resource://x",
+          content: "@x",
+          start: 4,
+          end: 6,
+          url: "resource://x",
+          source: {
+            type: "resource",
+            clientName: "x",
+            uri: "resource://x",
+            text: { value: "@x", start: 4, end: 6 },
+          },
+        },
+      ],
+      4,
+    )
+    const mention = { type: "file" as const, path: "y", content: "@y", start: 0, end: 0 }
+
+    prompt.addMention(mention)
+
+    expect(prompt.state.prompt).toEqual([
+      { type: "text", content: "see ", start: 0, end: 4 },
+      { type: "file", path: "y", content: "@y", start: 4, end: 6 },
+      { type: "text", content: " ", start: 6, end: 7 },
+      {
+        type: "file",
+        path: "resource://x",
+        content: "@x",
+        start: 7,
+        end: 9,
+        url: "resource://x",
+        source: {
+          type: "resource",
+          clientName: "x",
+          uri: "resource://x",
+          text: { value: "@x", start: 7, end: 9 },
+        },
+      },
+    ])
+    expect(prompt.state.cursor).toBe(7)
   })
 })

@@ -1,6 +1,7 @@
 import { onMount } from "solid-js"
 import { makeEventListener } from "@solid-primitives/event-listener"
 import type { PromptInputV2Attachment, PromptInputV2Prompt } from "./types"
+import { promptInputV2EditorCursor } from "./cursor"
 
 const accepted = [
   "image/png",
@@ -92,7 +93,7 @@ export function createPromptInputV2Attachments(
     const prompt = input.capture()
     const editor = input.editor()
     if (!editor) return
-    return { prompt, cursor: prompt.cursor() ?? cursorPosition(editor) }
+    return { prompt, cursor: prompt.cursor() ?? promptInputV2EditorCursor(editor) }
   }
   const add = async (file: File, toast = true, target = capture()) => {
     if (!target) return false
@@ -247,17 +248,6 @@ async function attachmentMime(file: File) {
   const control = bytes.filter((byte) => byte < 9 || (byte > 13 && byte < 32)).length
   if (bytes.length > 0 && control / bytes.length > 0.3) return
   return "text/plain"
-}
-
-function cursorPosition(editor: HTMLElement) {
-  const selection = window.getSelection()
-  if (!selection || selection.rangeCount === 0) return 0
-  const range = selection.getRangeAt(0)
-  if (!editor.contains(range.startContainer)) return 0
-  const before = range.cloneRange()
-  before.selectNodeContents(editor)
-  before.setEnd(range.startContainer, range.startOffset)
-  return before.toString().replace(/\u200B/g, "").length
 }
 
 function largePaste(text: string) {
