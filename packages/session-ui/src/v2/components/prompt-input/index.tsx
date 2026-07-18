@@ -86,6 +86,8 @@ export function PromptInputV2(props: PromptInputV2Props) {
   const state = props.controller.state
   const view = props.controller.view
   const label = <K extends keyof PromptInputV2Labels>(key: K) => props.labels?.[key] ?? defaultLabels[key]
+  const agent = () =>
+    view.agent && (view.agent.visible?.() ?? true) ? view.agent : undefined
   let editor: HTMLDivElement | undefined
   let localInput = false
   const updateCursor = () => {
@@ -252,7 +254,7 @@ export function PromptInputV2(props: PromptInputV2Props) {
               onContext={props.controller.openContext}
               onShell={props.controller.openShell}
             />
-            <Show when={view.agent?.()}>
+            <Show when={agent()}>
               {(control) => (
                 <PromptInputV2ConfiguredSelect
                   title={label("chooseAgent")}

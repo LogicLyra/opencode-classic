@@ -21,6 +21,7 @@ import {
 import { promptInputV2EditorCursor, setPromptInputV2EditorCursor } from "./cursor"
 
 export type PromptInputV2SelectControl = {
+  visible?: Accessor<boolean>
   options: Accessor<PromptInputV2Option[]>
   current: Accessor<string>
   onSelect: (id: string) => void
@@ -31,7 +32,7 @@ export type PromptInputV2ViewConfig = {
   add?: {
     onAttach: () => void
   }
-  agent?: Accessor<PromptInputV2SelectControl | undefined>
+  agent?: PromptInputV2SelectControl
   model?: PromptInputV2SelectControl
   variant?: PromptInputV2SelectControl
   submit: {

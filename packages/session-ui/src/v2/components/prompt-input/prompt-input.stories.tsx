@@ -154,11 +154,11 @@ function ControlledPromptInput() {
       add: {
         onAttach: () => addAttachment("architecture.txt", "text/plain"),
       },
-      agent: () => ({
+      agent: {
         options: () => agents,
         current: () => preferences.agent,
         onSelect: (agent) => setPreferences("agent", agent),
-      }),
+      },
       model: {
         options: () => models.map((model) => ({ id: model.id, label: model.name, providerID: model.providerID })),
         current: () =>

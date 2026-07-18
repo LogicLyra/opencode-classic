@@ -101,10 +101,11 @@ describe("prompt input v2 interaction machine", () => {
     )
 
     expect(selected.commands).toContainEqual({ type: "draft.prependText", value: "/review " })
+    expect(selected.commands).toContainEqual({ type: "focus.editor" })
     expect(selected.state.popover).toEqual({ type: "closed" })
   })
 
-  test("executes a menu command without mutating the draft and refocuses the editor", () => {
+  test("executes a menu command without mutating the draft or refocusing the editor", () => {
     const state = {
       ...createPromptInputV2InteractionState(),
       popover: { type: "command-menu" as const, query: "" },
@@ -117,11 +118,11 @@ describe("prompt input v2 interaction machine", () => {
       persisted("existing text"),
     )
 
-    expect(selected.commands).toEqual([{ type: "focus.editor" }])
+    expect(selected.commands).toEqual([])
     expect(selected.state.popover).toEqual({ type: "closed" })
   })
 
-  test("clears an inline command before executing it", () => {
+  test("clears an inline command before executing it without refocusing", () => {
     const state = {
       ...createPromptInputV2InteractionState(),
       popover: { type: "command-inline" as const, query: "model" },
@@ -133,7 +134,7 @@ describe("prompt input v2 interaction machine", () => {
       persisted("/model"),
     )
 
-    expect(selected.commands).toEqual([{ type: "draft.clearText" }, { type: "focus.editor" }])
+    expect(selected.commands).toEqual([{ type: "draft.clearText" }])
   })
 
   test("opens context by inserting at the persisted cursor", () => {

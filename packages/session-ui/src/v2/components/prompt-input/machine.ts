@@ -179,8 +179,12 @@ function suggestionSelected(
 ): PromptInputV2Transition {
   const current = promptText(persisted)
   const commands: PromptInputV2InteractionCommand[] = []
+  // Execute commands defer focus to their action (which may open a dialog or
+  // terminal); insert commands and mentions refocus the editor.
+  let refocusEditor = true
   if (item.kind === "command") {
     if (item.commandMode === "execute") {
+      refocusEditor = false
       if (state.popover.type !== "command-menu") commands.push({ type: "draft.clearText" })
     } else if (state.popover.type === "command-menu") {
       commands.push({ type: "draft.prependText", value: `${item.label} ` })
@@ -190,7 +194,7 @@ function suggestionSelected(
   } else {
     commands.push({ type: "mention.add", item })
   }
-  commands.push({ type: "focus.editor" })
+  if (refocusEditor) commands.push({ type: "focus.editor" })
   return changed({ ...state, popover: { type: "closed" }, focus: "editor" }, commands)
 }
 
