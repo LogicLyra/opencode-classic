@@ -296,7 +296,11 @@ function ProviderPickerV2(props: {
   const handleKeyDown = (event: KeyboardEvent) => {
     if (event.key === "ArrowDown") return move(event, 1)
     if (event.key === "ArrowUp") return move(event, -1)
-    if (event.key !== "Enter" || !store.active) return
+    if (event.key !== "Enter") return
+    // A focused provider row button activates natively on Enter; defer to that
+    // so we never connect a stale `active` row.
+    if (event.target instanceof HTMLElement && event.target.dataset.providerId !== undefined) return
+    if (!store.active) return
     connect(store.active)
     event.preventDefault()
   }
