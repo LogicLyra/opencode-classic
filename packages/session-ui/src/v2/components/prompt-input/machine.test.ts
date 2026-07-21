@@ -34,7 +34,7 @@ describe("prompt input v2 interaction machine", () => {
 
     const result = transitionPromptInputV2(
       createPromptInputV2InteractionState(),
-      { type: "input.changed", value, persist: false },
+      { type: "input.changed", value, cursor: input.cursor, persist: false },
       input,
     )
 
