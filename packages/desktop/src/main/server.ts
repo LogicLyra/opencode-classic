@@ -211,7 +211,6 @@ export async function checkHealth(url: string, password?: string | null): Promis
 
 function createSidecarEnv(userDataPath: string): Record<string, string> {
   const env = createIsolatedSidecarEnv(userDataPath)
-  if (!app.isPackaged) env.OPENCODE_DISABLE_CHANNEL_DB = "1"
   return env
 }
 

@@ -11,6 +11,9 @@ const packageDir = path.dirname(fileURLToPath(import.meta.url))
 const rootDir = path.resolve(packageDir, "../..")
 const signScript = path.join(rootDir, "script", "sign-windows.ps1")
 
+const metainfoFpm = (appId: string) =>
+  `${path.join(packageDir, "resources", `${appId}.metainfo.xml`)}=/usr/share/metainfo/${appId}.metainfo.xml`
+
 async function signWindows(configuration: { path: string }) {
   if (process.platform !== "win32") return
   if (process.env.GITHUB_ACTIONS !== "true") return
@@ -111,8 +114,8 @@ function getConfig() {
         ...base,
         appId: identity.appId,
         productName: identity.productName,
-        deb: { packageName: identity.packageName },
-        rpm: { packageName: identity.packageName },
+        deb: { packageName: identity.packageName, fpm: [metainfoFpm(identity.appId)] },
+        rpm: { packageName: identity.packageName, fpm: [metainfoFpm(identity.appId)] },
       }
     }
     case "beta": {
@@ -120,8 +123,8 @@ function getConfig() {
         ...base,
         appId: identity.appId,
         productName: identity.productName,
-        deb: { packageName: identity.packageName },
-        rpm: { packageName: identity.packageName },
+        deb: { packageName: identity.packageName, fpm: [metainfoFpm(identity.appId)] },
+        rpm: { packageName: identity.packageName, fpm: [metainfoFpm(identity.appId)] },
       }
     }
     case "prod": {
@@ -130,8 +133,8 @@ function getConfig() {
         appId: identity.appId,
         productName: identity.productName,
         publish: { provider: "github", ...DESKTOP_RELEASE_REPOSITORY, channel: "latest" },
-        deb: { packageName: identity.packageName },
-        rpm: { packageName: identity.packageName },
+        deb: { packageName: identity.packageName, fpm: [metainfoFpm(identity.appId)] },
+        rpm: { packageName: identity.packageName, fpm: [metainfoFpm(identity.appId)] },
       }
     }
   }

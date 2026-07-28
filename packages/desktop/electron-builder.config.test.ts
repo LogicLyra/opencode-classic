@@ -31,6 +31,8 @@ for (const channel of channels) {
     expect(config.protocols).toEqual({ name: identity.productName, schemes: [DESKTOP_PROTOCOL] })
     expect(config.deb?.packageName).toBe(identity.packageName)
     expect(config.rpm?.packageName).toBe(identity.packageName)
+    expect(config.deb?.fpm).toContainEqual(expect.stringContaining(`/usr/share/metainfo/${identity.appId}.metainfo.xml`))
+    expect(config.rpm?.fpm).toContainEqual(expect.stringContaining(`/usr/share/metainfo/${identity.appId}.metainfo.xml`))
     expect(config.extraResources).toContainEqual({
       from: "resources/icons/",
       to: "icons/",
