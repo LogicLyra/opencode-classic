@@ -233,6 +233,11 @@ export function registerIpcHandlers(deps: Deps) {
     return win?.isFocused() ?? false
   })
 
+  handleTrusted("get-window-fullscreen", (event: IpcMainInvokeEvent) => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    return win?.isFullScreen() ?? false
+  })
+
   handleTrusted("set-window-focus", (event: IpcMainInvokeEvent) => {
     const win = BrowserWindow.fromWebContents(event.sender)
     win?.focus()
