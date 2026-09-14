@@ -49,7 +49,10 @@ jobs:
           VERSION="$VERSION" bun -e 'for (const file of ["packages/opencode/package.json", "packages/desktop/package.json"]) { const pkg = await Bun.file(file).json(); if (pkg.version !== process.env.VERSION) throw new Error(`${file} is ${pkg.version}, expected ${process.env.VERSION}`) }'
           draft=$(gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)
           test "$draft" = true
-          test "$(git rev-list -n 1 "v$VERSION")" = "$APPROVED_SHA"
+          # Draft releases do not materialize the git tag until publication, so
+          # validate the draft's target commitish instead of resolving a tag.
+          target=$(gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" --json targetCommitish --jq .targetCommitish)
+          test "$target" = "$APPROVED_SHA"
 
       - name: Download and verify draft assets
         env:
