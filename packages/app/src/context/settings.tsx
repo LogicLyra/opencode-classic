@@ -57,8 +57,10 @@ export interface Settings {
 export const monoDefault = "System Mono"
 export const sansDefault = "System Sans"
 export const terminalDefault = "JetBrainsMono Nerd Font Mono"
-const legacyNewLayoutDesignsDefault = import.meta.env.VITE_OPENCODE_CHANNEL !== "prod"
-export const newLayoutDesignsDefault = true
+// fork: classic layout is the default on every channel, including before the store loads
+const legacyNewLayoutDesignsDefault = false
+// fork: fresh profiles start on the classic layout; the new layout stays one toggle away
+export const newLayoutDesignsDefault = false
 // Existing users can switch layouts until local midnight on this date. Set new Date(YYYY, M-1, D) to show.
 // fork: the classic interface is preserved indefinitely; no sunset, no forced retirement
 export let oldInterfaceSunset: Date | null = null
@@ -103,7 +105,9 @@ export function initialAgentVisibility(initialized: boolean | undefined, existin
 export function shouldEnableNewLayout(previous: string | undefined, current: string | undefined) {
   if (!current) return false
   const currentComparison = compareVersions(current, newLayoutDesignsUpgradeCutoff)
-  if (!previous) return currentComparison !== undefined && currentComparison > 0
+  // fork: first launches never auto-migrate to the new layout; only genuine
+  // upgrades from before the cutoff do
+  if (!previous) return false
   if (!isAppUpgrade(previous, current)) return false
   const previousComparison = compareVersions(previous, newLayoutDesignsUpgradeCutoff)
   return (

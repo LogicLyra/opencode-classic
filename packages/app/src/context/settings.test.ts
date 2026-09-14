@@ -29,8 +29,8 @@ describe("agent visibility", () => {
 })
 
 describe("layout transition", () => {
-  test("blank profiles default to the new layout", () => {
-    expect(newLayoutDesignsDefault).toBe(true)
+  test("blank profiles default to the classic layout (fork)", () => {
+    expect(newLayoutDesignsDefault).toBe(false)
   })
 
   test("hides the transition until a sunset is scheduled", () => {
@@ -70,8 +70,8 @@ describe("layout transition", () => {
     expect(shouldEnableNewLayout("1.16.9", "2.0.0")).toBe(true)
   })
 
-  test("enables the new layout when no previous version was recorded", () => {
-    expect(shouldEnableNewLayout(undefined, "1.17.20")).toBe(true)
+  test("does not auto-migrate first launches to the new layout (fork)", () => {
+    expect(shouldEnableNewLayout(undefined, "1.17.20")).toBe(false)
   })
 
   test("detects upgrades only when a previous version is older", () => {
