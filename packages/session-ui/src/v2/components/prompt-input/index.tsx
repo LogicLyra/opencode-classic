@@ -1,8 +1,9 @@
-import { createEffect, createMemo, For, Show, untrack, type JSX } from "solid-js"
+import { createEffect, createMemo, For, Show, type Accessor, type JSX } from "solid-js"
 import { FileIcon } from "@opencode-ai/ui/file-icon"
 import { Icon } from "@opencode-ai/ui/icon"
 import { IconButton } from "@opencode-ai/ui/icon-button"
 import { ProviderIcon } from "@opencode-ai/ui/provider-icon"
+import { useI18n } from "@opencode-ai/ui/context/i18n"
 import { ButtonV2 } from "@opencode-ai/ui/v2/button-v2"
 import { Icon as IconV2 } from "@opencode-ai/ui/v2/icon"
 import { IconButtonV2 } from "@opencode-ai/ui/v2/icon-button-v2"
@@ -21,7 +22,7 @@ import type {
   PromptInputV2Suggestion,
 } from "./types"
 import type { PromptInputV2Interaction, PromptInputV2SelectControl } from "./interaction"
-import { promptInputV2EditorCursor, promptInputV2EditorSegments, setPromptInputV2EditorCursor } from "./cursor"
+import "./attachments.css"
 
 export type {
   PromptInputV2Attachment,
@@ -33,44 +34,6 @@ export type {
 
 export type PromptInputV2Mode = "normal" | "shell"
 
-export type PromptInputV2Labels = {
-  emptyResults: string
-  commands: string
-  dropFiles: string
-  prompt: string
-  removeAttachment: string
-  placeholderNormal: string
-  placeholderShell: string
-  addFiles: string
-  imagesAndFiles: string
-  context: string
-  shellCommand: string
-  chooseAgent: string
-  chooseModel: string
-  chooseVariant: string
-  send: string
-  stop: string
-}
-
-const defaultLabels: PromptInputV2Labels = {
-  emptyResults: "No matching items",
-  commands: "Commands",
-  dropFiles: "Drop files to attach",
-  prompt: "Prompt",
-  removeAttachment: "Remove attachment",
-  placeholderNormal: "Ask anything, / for commands, @ for context...",
-  placeholderShell: "Enter shell command...",
-  addFiles: "Add images and files",
-  imagesAndFiles: "Images and files",
-  context: "Context",
-  shellCommand: "Shell command",
-  chooseAgent: "Choose agent",
-  chooseModel: "Choose model",
-  chooseVariant: "Choose model variant",
-  send: "Send",
-  stop: "Stop",
-}
-
 export type PromptInputV2Props = {
   controller: PromptInputV2Interaction
   disabled?: boolean
@@ -78,20 +41,20 @@ export type PromptInputV2Props = {
   borderUnderlay?: boolean
   class?: string
   modelControl?: JSX.Element
-  labels?: Partial<PromptInputV2Labels>
+  variantControlVisible?: boolean
+  attachKeybind?: string[]
+  attachShortcut?: string
 }
 
 export function PromptInputV2(props: PromptInputV2Props) {
+  const i18n = useI18n()
   const state = props.controller.state
   const view = props.controller.view
-  const label = <K extends keyof PromptInputV2Labels>(key: K) => props.labels?.[key] ?? defaultLabels[key]
-  const agent = () =>
-    view.agent && (view.agent.visible?.() ?? true) ? view.agent : undefined
   let editor: HTMLDivElement | undefined
   let localInput = false
   const updateCursor = () => {
     if (!editor || !window.getSelection()?.isCollapsed) return
-    props.controller.onCursor(promptInputV2EditorCursor(editor))
+    props.controller.onCursor(promptInputV2Cursor(editor))
   }
   const mode = createMemo(() => state.mode)
   const buttons = createMemo(() => ({
@@ -107,11 +70,7 @@ export function PromptInputV2(props: PromptInputV2Props) {
       localInput = false
       return
     }
-    renderPromptInputV2Editor(
-      editor,
-      parts,
-      untrack(() => props.controller.cursor()),
-    )
+    renderPromptInputV2Editor(editor, parts)
   })
 
   return (
@@ -130,14 +89,14 @@ export function PromptInputV2(props: PromptInputV2Props) {
       />
       <Show when={state.popover.type !== "closed"}>
         <PromptInputV2Popover
-          emptyLabel={label("emptyResults")}
+          emptyLabel={i18n.t("ui.promptInput.noMatchingItems")}
           items={props.controller.suggestions()}
           activeID={state.popover.type === "closed" ? undefined : state.popover.activeID}
           search={
             state.popover.type === "command-menu"
               ? {
                   value: state.popover.query,
-                  label: label("commands"),
+                  label: i18n.t("ui.promptInput.commands"),
                   placeholder: "/",
                   onValueChange: props.controller.setQuery,
                   onKeyDown: props.controller.onKeyDown,
@@ -151,7 +110,7 @@ export function PromptInputV2(props: PromptInputV2Props) {
       <form
         data-component="prompt-input-v2"
         data-dock-border-underlay={props.borderUnderlay ? "v2" : undefined}
-        class="group/prompt-input relative min-h-[96px] w-full rounded-xl bg-v2-background-bg-base"
+        class="group/prompt-input relative min-h-[96px] w-full overflow-clip rounded-xl bg-v2-background-bg-base"
         classList={{
           "shadow-[var(--v2-elevation-raised)]": !props.borderUnderlay,
           "border border-v2-icon-icon-info border-dashed": state.drag === "active",
@@ -167,7 +126,7 @@ export function PromptInputV2(props: PromptInputV2Props) {
       >
         <Show when={state.drag === "active"}>
           <div class="pointer-events-none absolute inset-0 z-20 grid place-items-center rounded-xl bg-v2-background-bg-base/90 text-v2-text-text-base">
-            {label("dropFiles")}
+            {i18n.t("ui.promptInput.dropFiles")}
           </div>
         </Show>
 
@@ -176,7 +135,7 @@ export function PromptInputV2(props: PromptInputV2Props) {
             attachments={props.controller.attachments()}
             comments={props.controller.comments()}
             activeCommentID={state.activeContextID}
-            removeLabel={label("removeAttachment")}
+            removeLabel={i18n.t("ui.promptInput.removeAttachment")}
             onAttachmentClick={props.controller.openAttachment}
             onAttachmentRemove={(attachment) => props.controller.removeAttachment(attachment.id)}
             onCommentClick={(comment) => props.controller.toggleContext(comment.key)}
@@ -189,24 +148,22 @@ export function PromptInputV2(props: PromptInputV2Props) {
             ref={(element) => {
               editor = element
               props.controller.setEditor(element)
-              renderPromptInputV2Editor(element, props.controller.parts(), props.controller.cursor())
+              renderPromptInputV2Editor(element, props.controller.parts())
             }}
             data-component="prompt-input"
             role="textbox"
             aria-multiline="true"
-            aria-label={label("prompt")}
+            aria-label={i18n.t("ui.promptInput.label")}
             contenteditable={!props.disabled && !props.readOnly}
             autocapitalize={state.mode === "normal" ? "sentences" : "off"}
             autocorrect={state.mode === "normal" ? "on" : "off"}
             spellcheck={state.mode === "normal"}
             // @ts-expect-error
             autocomplete="off"
-            class={
-              "relative z-10 block min-h-[60px] max-h-[180px] w-full overflow-y-auto whitespace-pre-wrap bg-transparent px-4 pt-4 pb-2 text-[13px] font-[440] leading-5 text-v2-text-text-base focus:outline-none empty:before:content-['\\200B'] [&_[data-mention=file]]:text-syntax-property [&_[data-mention=agent]]:text-syntax-type [&_[data-mention=reference]]:text-syntax-keyword"
-            }
+            class="relative z-10 block min-h-[60px] max-h-[180px] w-full overflow-y-auto whitespace-pre-wrap bg-transparent px-4 pt-4 pb-2 text-[13px] font-[440] leading-5 text-v2-text-text-base focus:outline-none empty:before:content-['\200B'] [&_[data-mention=file]]:text-syntax-property [&_[data-mention=agent]]:text-syntax-type [&_[data-mention=reference]]:text-syntax-keyword"
             classList={{ "font-mono!": state.mode === "shell", "opacity-50": props.disabled }}
             onInput={(event) => {
-              const cursor = promptInputV2EditorCursor(event.currentTarget)
+              const cursor = promptInputV2Cursor(event.currentTarget)
               const prompt = parsePromptInputV2Editor(event.currentTarget)
               const images = props.controller.parts().filter((part) => part.type === "image")
               localInput = true
@@ -231,7 +188,9 @@ export function PromptInputV2(props: PromptInputV2Props) {
               classList={{ "font-mono!": state.mode === "shell" }}
             >
               {view.placeholder?.() ??
-                (state.mode === "shell" ? label("placeholderShell") : label("placeholderNormal"))}
+                (state.mode === "shell"
+                  ? i18n.t("ui.promptInput.placeholder.shell")
+                  : i18n.t("ui.promptInput.placeholder.normal", { slash: "/", at: "@" }))}
             </div>
           </Show>
         </div>
@@ -245,36 +204,36 @@ export function PromptInputV2(props: PromptInputV2Props) {
           >
             <PromptInputV2AddMenu
               disabled={state.mode === "shell"}
-              title={label("addFiles")}
-              keybind={["Mod", "U"]}
-              attachLabel={label("imagesAndFiles")}
-              attachShortcut="Mod+U"
-              commandsLabel={label("commands")}
-              contextLabel={label("context")}
-              shellLabel={label("shellCommand")}
+              title={i18n.t("ui.promptInput.add")}
+              keybind={props.attachKeybind ?? ["Mod", "U"]}
+              attachLabel={i18n.t("ui.promptInput.attachments")}
+              attachShortcut={props.attachShortcut ?? "Mod+U"}
+              commandsLabel={i18n.t("ui.promptInput.commands")}
+              contextLabel={i18n.t("ui.promptInput.context")}
+              shellLabel={i18n.t("ui.promptInput.shell")}
               onAttach={props.controller.attach}
               onCommands={props.controller.openCommands}
               onContext={props.controller.openContext}
               onShell={props.controller.openShell}
             />
-            <Show when={agent()}>
+            <Show when={view.agent} keyed>
               {(control) => (
                 <PromptInputV2ConfiguredSelect
-                  title={label("chooseAgent")}
+                  title={i18n.t("ui.promptInput.chooseAgent")}
                   keybind={["Mod", "."]}
-                  control={control()}
+                  control={control}
                 />
               )}
             </Show>
             <Show
               when={props.modelControl}
               fallback={
-                <Show when={view.model}>
+                <Show when={view.model} keyed>
                   {(control) => (
                     <PromptInputV2ConfiguredSelect
-                      title={label("chooseModel")}
+                      title={i18n.t("ui.promptInput.chooseModel")}
                       keybind={["Mod", "M"]}
-                      control={control()}
+                      control={control}
                       model
                     />
                   )}
@@ -283,10 +242,14 @@ export function PromptInputV2(props: PromptInputV2Props) {
             >
               {props.modelControl}
             </Show>
-            <Show when={view.variant}>
+            <Show when={(props.variantControlVisible ?? true) && view.variant} keyed>
               {(control) => (
-                <Show when={control().options().length > 1}>
-                  <PromptInputV2ConfiguredSelect title={label("chooseVariant")} control={control()} />
+                <Show when={control.options().length > 1}>
+                  <PromptInputV2ConfiguredSelect
+                    title={i18n.t("ui.promptInput.chooseVariant")}
+                    keybind={["Shift", "Mod", "D"]}
+                    control={control}
+                  />
                 </Show>
               )}
             </Show>
@@ -295,8 +258,8 @@ export function PromptInputV2(props: PromptInputV2Props) {
             mode={state.mode}
             stopping={view.submit.stopping()}
             disabled={!props.controller.canSubmit()}
-            sendLabel={label("send")}
-            stopLabel={label("stop")}
+            sendLabel={i18n.t("ui.promptInput.send")}
+            stopLabel={i18n.t("ui.promptInput.stop")}
             onSubmit={props.controller.submit}
             onStop={props.controller.stop}
           />
@@ -306,37 +269,33 @@ export function PromptInputV2(props: PromptInputV2Props) {
   )
 }
 
-type PromptInputV2Mention = Extract<PromptInputV2Prompt[number], { type: "file" | "agent" }>
-const promptInputV2Mentions = new WeakMap<HTMLElement, PromptInputV2Mention>()
-
-function renderPromptInputV2Editor(editor: HTMLDivElement, prompt: PromptInputV2Prompt, cursor?: number) {
+function renderPromptInputV2Editor(editor: HTMLDivElement, prompt: PromptInputV2Prompt) {
   const active = document.activeElement === editor
-  const nodes: Node[] = []
-  for (const part of prompt) {
-    if (part.type === "image") continue
-    if (part.type === "text") {
-      const previous = nodes.at(-1)
-      if (previous instanceof Text) previous.data += part.content
-      else nodes.push(document.createTextNode(part.content))
-      continue
-    }
-    const mention = document.createElement("span")
-    mention.textContent = part.content
-    mention.contentEditable = "false"
-    mention.dataset.mention =
-      part.type === "file" && part.mime === "application/x-directory" ? "reference" : part.type
-    if (part.type === "agent") mention.dataset.name = part.name
-    if (part.type === "file") {
-      mention.dataset.path = part.path
-      if (part.mime) mention.dataset.mime = part.mime
-      if (part.filename) mention.dataset.filename = part.filename
-    }
-    promptInputV2Mentions.set(mention, part)
-    nodes.push(mention)
-  }
-  editor.replaceChildren(...nodes)
+  editor.replaceChildren(
+    ...prompt.flatMap<Node>((part) => {
+      if (part.type === "image") return []
+      if (part.type === "text") return [document.createTextNode(part.content)]
+      const mention = document.createElement("span")
+      mention.textContent = part.content
+      mention.contentEditable = "false"
+      mention.dataset.mention =
+        part.type === "file" && part.mime === "application/x-directory" ? "reference" : part.type
+      if (part.type === "agent") mention.dataset.name = part.name
+      if (part.type === "file") {
+        mention.dataset.path = part.path
+        if (part.mime) mention.dataset.mime = part.mime
+        if (part.filename) mention.dataset.filename = part.filename
+      }
+      return [mention]
+    }),
+  )
   if (!active) return
-  setPromptInputV2EditorCursor(editor, cursor)
+  const selection = window.getSelection()
+  const range = document.createRange()
+  range.selectNodeContents(editor)
+  range.collapse(false)
+  selection?.removeAllRanges()
+  selection?.addRange(range)
 }
 
 function parsePromptInputV2Editor(editor: HTMLDivElement) {
@@ -353,51 +312,49 @@ function parsePromptInputV2Editor(editor: HTMLDivElement) {
   const mention = (element: HTMLElement) => {
     flush()
     const content = element.textContent ?? ""
-    const original = promptInputV2Mentions.get(element)
-    const start = position
-    const end = start + content.length
     if (element.dataset.mention === "agent") {
-      const agent = original?.type === "agent" ? original : undefined
       parts.push({
-        ...agent,
         type: "agent",
-        name: agent?.name ?? element.dataset.name ?? content.slice(1),
+        name: element.dataset.name ?? content.slice(1),
         content,
-        start,
-        end,
+        start: position,
+        end: position + content.length,
       })
-      position = end
+      position += content.length
       return
     }
-    const file = original?.type === "file" ? original : undefined
-    const source = file?.source
-      ? { ...file.source, text: { ...file.source.text, value: content, start, end } }
-      : undefined
     parts.push({
-      ...file,
       type: "file",
-      path: file?.path ?? element.dataset.path ?? content.slice(1),
+      path: element.dataset.path ?? content.slice(1),
       content,
-      start,
-      end,
+      start: position,
+      end: position + content.length,
       ...(element.dataset.mime ? { mime: element.dataset.mime } : {}),
       ...(element.dataset.filename ? { filename: element.dataset.filename } : {}),
-      ...(source ? { source } : {}),
     })
-    position = end
+    position += content.length
+  }
+  const visit = (node: Node) => {
+    if (node.nodeType === Node.TEXT_NODE) {
+      buffer += node.textContent ?? ""
+      return
+    }
+    if (!(node instanceof HTMLElement)) return
+    if (node.dataset.mention) {
+      mention(node)
+      return
+    }
+    if (node.tagName === "BR") {
+      buffer += "\n"
+      return
+    }
+    Array.from(node.childNodes).forEach(visit)
   }
 
-  for (const segment of promptInputV2EditorSegments(editor)) {
-    if (segment.kind === "text") {
-      buffer += segment.node.textContent ?? ""
-      continue
-    }
-    if (segment.kind === "break" || segment.kind === "block-boundary") {
-      buffer += "\n"
-      continue
-    }
-    mention(segment.element)
-  }
+  Array.from(editor.childNodes).forEach((node, index, nodes) => {
+    visit(node)
+    if (node instanceof HTMLElement && ["DIV", "P"].includes(node.tagName) && index < nodes.length - 1) buffer += "\n"
+  })
   flush()
   if (
     parts.every((part) => part.type === "text") &&
@@ -407,6 +364,15 @@ function parsePromptInputV2Editor(editor: HTMLDivElement) {
   }
   if (parts.length > 0) return parts
   return [{ type: "text" as const, content: "", start: 0, end: 0 }]
+}
+
+function promptInputV2Cursor(editor: HTMLDivElement) {
+  const selection = window.getSelection()
+  if (!selection?.rangeCount || !editor.contains(selection.anchorNode)) return editor.textContent?.length ?? 0
+  const range = selection.getRangeAt(0).cloneRange()
+  range.selectNodeContents(editor)
+  range.setEnd(selection.anchorNode!, selection.anchorOffset)
+  return range.toString().length
 }
 
 export function PromptInputV2Attachments(props: {
@@ -419,9 +385,10 @@ export function PromptInputV2Attachments(props: {
   onCommentClick?: (comment: PromptInputV2Comment) => void
   onCommentRemove?: (comment: PromptInputV2Comment) => void
 }) {
+  const i18n = useI18n()
   return (
     <Show when={props.attachments.length > 0 || (props.comments?.length ?? 0) > 0}>
-      <div data-slot="prompt-attachments" class="relative">
+      <div data-component="prompt-input-v2-attachments" data-slot="prompt-attachments" class="relative">
         <div
           data-slot="prompt-attachments-scroll"
           class="flex flex-nowrap gap-2 overflow-x-auto no-scrollbar px-2 pt-2 pb-1"
@@ -446,7 +413,7 @@ export function PromptInputV2Attachments(props: {
                 <button
                   type="button"
                   onClick={() => props.onCommentRemove?.(comment)}
-                  class="absolute -top-1 -right-1 size-4 rounded-full bg-v2-icon-icon-muted outline-solid outline-1 outline-v2-icon-icon-contrast flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                  class="absolute -top-1 -end-1 size-4 rounded-full bg-v2-icon-icon-muted outline-solid outline-1 outline-v2-icon-icon-contrast flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
                   aria-label={props.removeLabel}
                 >
                   <IconV2 name="outline-xmark" class="text-v2-icon-icon-contrast" />
@@ -462,12 +429,12 @@ export function PromptInputV2Attachments(props: {
                     when={attachment.mime.startsWith("image/")}
                     fallback={
                       <AttachmentCardV2 title={attachment.filename}>
-                        {typeLabel(attachment.filename, attachment.mime)}
+                        {typeLabel(attachment.filename, attachment.mime, i18n.t("ui.common.file"))}
                       </AttachmentCardV2>
                     }
                   >
                     <img
-                      src={attachment.dataUrl}
+                      src={attachment.blob.url}
                       alt={attachment.filename}
                       class="w-[58px] h-[46px] rounded-[6px] object-cover"
                       onClick={() => props.onAttachmentClick?.(attachment)}
@@ -478,7 +445,7 @@ export function PromptInputV2Attachments(props: {
                 <button
                   type="button"
                   onClick={() => props.onAttachmentRemove(attachment)}
-                  class="absolute -top-1 -right-1 size-4 rounded-full bg-v2-icon-icon-muted outline-solid outline-1 outline-v2-icon-icon-contrast flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                  class="absolute -top-1 -end-1 size-4 rounded-full bg-v2-icon-icon-muted outline-solid outline-1 outline-v2-icon-icon-contrast flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
                   aria-label={props.removeLabel}
                 >
                   <IconV2 name="outline-xmark" class="text-v2-icon-icon-contrast" />
@@ -487,8 +454,14 @@ export function PromptInputV2Attachments(props: {
             )}
           </For>
         </div>
-        <div class="pointer-events-none absolute inset-y-0 left-0 z-10 w-6 bg-[linear-gradient(to_right,var(--v2-background-bg-base),transparent)]" />
-        <div class="pointer-events-none absolute inset-y-0 right-0 z-10 w-6 bg-[linear-gradient(to_left,var(--v2-background-bg-base),transparent)]" />
+        <div
+          data-slot="prompt-attachments-fade-left"
+          class="pointer-events-none absolute inset-y-0 start-0 z-10 w-6 bg-[linear-gradient(to_right,var(--v2-background-bg-base),transparent)] rtl:bg-[linear-gradient(to_left,var(--v2-background-bg-base),transparent)]"
+        />
+        <div
+          data-slot="prompt-attachments-fade-right"
+          class="pointer-events-none absolute inset-y-0 end-0 z-10 w-6 bg-[linear-gradient(to_left,var(--v2-background-bg-base),transparent)] rtl:bg-[linear-gradient(to_right,var(--v2-background-bg-base),transparent)]"
+        />
       </div>
     </Show>
   )
@@ -562,7 +535,7 @@ function PromptInputV2ConfiguredSelect(props: {
   return (
     <PromptInputV2Select
       title={props.title}
-      keybind={props.keybind}
+      keybind={props.control.keybind?.() ?? props.keybind}
       options={props.control.options()}
       current={current()}
       currentIcon={
@@ -586,36 +559,46 @@ export function PromptInputV2Select(props: {
   onSelect: (id: string) => void
 }) {
   return (
-    <MenuV2 gutter={6} modal={false} placement="top-start" onOpenChange={props.onOpenChange}>
-      <MenuV2.Trigger
-        as={ButtonV2}
-        variant="ghost-muted"
-        size="normal"
-        class={`max-w-[220px] justify-start ![font-weight:440] ${props.class ?? ""}`}
-        title={keybindTitle(props.title, props.keybind)}
-      >
-        {props.currentIcon}
-        <span class="truncate capitalize leading-5">
-          {props.options.find((option) => option.id === props.current)?.label ?? props.current}
-        </span>
-        <span class="-ml-0.5 -mr-1 flex shrink-0">
-          <IconV2 name="chevron-down" />
-        </span>
-      </MenuV2.Trigger>
-      <MenuV2.Portal>
-        <MenuV2.Content>
-          <MenuV2.RadioGroup value={props.current} onChange={props.onSelect}>
-            <For each={props.options}>
-              {(option) => (
-                <MenuV2.RadioItem value={option.id} class="capitalize" closeOnSelect>
-                  {option.label}
-                </MenuV2.RadioItem>
-              )}
-            </For>
-          </MenuV2.RadioGroup>
-        </MenuV2.Content>
-      </MenuV2.Portal>
-    </MenuV2>
+    <TooltipV2
+      placement="top"
+      value={
+        <>
+          {props.title}
+          <KeybindV2 keys={props.keybind ?? []} variant="neutral" />
+        </>
+      }
+    >
+      <MenuV2 gutter={6} modal={false} placement="top-start" onOpenChange={props.onOpenChange}>
+        <MenuV2.Trigger
+          as={ButtonV2}
+          variant="ghost-muted"
+          size="normal"
+          class={`max-w-[220px] justify-start ![font-weight:440] ${props.class ?? ""}`}
+          aria-label={props.title}
+        >
+          {props.currentIcon}
+          <span class="truncate capitalize leading-5">
+            {props.options.find((option) => option.id === props.current)?.label ?? props.current}
+          </span>
+          <span class="-ms-0.5 -me-1 flex shrink-0">
+            <IconV2 name="chevron-down" />
+          </span>
+        </MenuV2.Trigger>
+        <MenuV2.Portal>
+          <MenuV2.Content>
+            <MenuV2.RadioGroup value={props.current} onChange={props.onSelect}>
+              <For each={props.options}>
+                {(option) => (
+                  <MenuV2.RadioItem value={option.id} class="capitalize" closeOnSelect>
+                    {option.label}
+                  </MenuV2.RadioItem>
+                )}
+              </For>
+            </MenuV2.RadioGroup>
+          </MenuV2.Content>
+        </MenuV2.Portal>
+      </MenuV2>
+    </TooltipV2>
   )
 }
 
@@ -663,7 +646,7 @@ export function PromptInputV2Popover(props: {
             <button
               type="button"
               data-suggestion-id={item.id}
-              class="flex w-full items-center gap-2 rounded-md px-2 py-1 text-left hover:bg-v2-overlay-simple-overlay-hover"
+              class="flex w-full items-center gap-2 rounded-md px-2 py-1 text-start hover:bg-v2-overlay-simple-overlay-hover"
               classList={{ "bg-v2-overlay-simple-overlay-hover": props.activeID === item.id }}
               onPointerMove={() => props.onActiveChange(item)}
               onClick={() => props.onSelect(item)}
@@ -737,9 +720,4 @@ function PromptInputV2SuggestionIcon(props: { item: PromptInputV2Suggestion }) {
       class="size-4 shrink-0"
     />
   )
-}
-
-function keybindTitle(label: string, keybind?: string[]) {
-  if (!keybind?.length) return label
-  return `${label} (${keybind.join("+")})`
 }

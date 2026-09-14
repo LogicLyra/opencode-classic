@@ -31,7 +31,7 @@ export type PromptInputV2Attachment = {
   filename: string
   sourcePath?: string
   mime: string
-  dataUrl: string
+  blob: { id: string; url: string }
 }
 
 export type PromptInputV2Prompt = (
@@ -95,7 +95,6 @@ export type PromptInputV2Option = {
 export type PromptInputV2Suggestion = {
   id: string
   kind: "agent" | "command" | "file" | "reference" | "resource"
-  commandMode?: "insert" | "execute"
   label: string
   title?: string
   trigger?: string

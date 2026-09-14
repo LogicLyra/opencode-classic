@@ -15,7 +15,7 @@ export type PromptInputV2InteractionState = {
 }
 
 export type PromptInputV2InteractionEvent =
-  | { type: "input.changed"; value: string; cursor?: number; persist?: boolean }
+  | { type: "input.changed"; value: string; persist?: boolean }
   | { type: "commands.open" }
   | { type: "context.open" }
   | { type: "popover.query"; value: string }
@@ -34,9 +34,6 @@ export type PromptInputV2InteractionEvent =
 
 export type PromptInputV2InteractionCommand =
   | { type: "draft.setText"; value: string }
-  | { type: "draft.insertText"; value: string }
-  | { type: "draft.prependText"; value: string }
-  | { type: "draft.clearText" }
   | { type: "mention.add"; item: PromptInputV2Suggestion }
   | { type: "popover.filter"; popover: "command" | "context"; query: string }
   | { type: "suggestion.select"; id: string }
@@ -64,7 +61,7 @@ export function transitionPromptInputV2(
   event: PromptInputV2InteractionEvent,
   persisted: PromptInputV2PersistedState,
 ): PromptInputV2Transition {
-  if (event.type === "input.changed") return inputChanged(state, event.value, event.persist !== false, event.cursor)
+  if (event.type === "input.changed") return inputChanged(state, event.value, event.persist !== false, persisted.cursor)
   if (event.type === "commands.open") return openCommands(state, persisted)
   if (event.type === "context.open") return openContext(state, persisted)
   if (event.type === "popover.query") return queryChanged(state, event.value)
@@ -88,7 +85,7 @@ function inputChanged(
   state: PromptInputV2InteractionState,
   value: string,
   persist: boolean,
-  cursor?: number,
+  cursor: number | undefined,
 ): PromptInputV2Transition {
   const setText: PromptInputV2InteractionCommand[] = persist ? [{ type: "draft.setText", value }] : []
   if (state.mode === "normal" && value === "!") {
@@ -96,8 +93,7 @@ function inputChanged(
       { type: "draft.setText", value: "" },
     ])
   }
-  const prefix = value.slice(0, cursor ?? value.length)
-  const context = prefix.match(state.popover.type === "context" ? /@([^\s@]*)$/ : /(?:^|\s)@([^\s@]*)$/)
+  const context = value.slice(0, cursor ?? value.length).match(/(?:^|\s)@([^\s@]*)$/)
   if (context) {
     const query = context[1] ?? ""
     return changed({ ...state, popover: { type: "context", query }, focus: "editor" }, [
@@ -127,7 +123,7 @@ function openCommands(
 ): PromptInputV2Transition {
   if (!populated(persisted)) {
     return changed({ ...state, popover: { type: "command-inline", query: "" }, focus: "editor" }, [
-      { type: "draft.insertText", value: "/" },
+      { type: "draft.setText", value: promptText(persisted) + "/" },
       { type: "popover.filter", popover: "command", query: "" },
       { type: "focus.editor" },
     ])
@@ -142,11 +138,8 @@ function openContext(
   state: PromptInputV2InteractionState,
   persisted: PromptInputV2PersistedState,
 ): PromptInputV2Transition {
-  const value = promptValue(persisted)
-  const cursor = Math.max(0, Math.min(persisted.cursor ?? value.length, value.length))
-  const trigger = cursor > 0 && !/\s/.test(value[cursor - 1] ?? "") ? " @" : "@"
   return changed({ ...state, popover: { type: "context", query: "" }, focus: "editor" }, [
-    { type: "draft.insertText", value: trigger },
+    { type: "draft.setText", value: promptText(persisted) + "@" },
     { type: "popover.filter", popover: "context", query: "" },
     { type: "focus.editor" },
   ])
@@ -179,22 +172,20 @@ function suggestionSelected(
 ): PromptInputV2Transition {
   const current = promptText(persisted)
   const commands: PromptInputV2InteractionCommand[] = []
-  // Execute commands defer focus to their action (which may open a dialog or
-  // terminal); insert commands and mentions refocus the editor.
-  let refocusEditor = true
   if (item.kind === "command") {
-    if (item.commandMode === "execute") {
-      refocusEditor = false
-      if (state.popover.type !== "command-menu") commands.push({ type: "draft.clearText" })
-    } else if (state.popover.type === "command-menu") {
-      commands.push({ type: "draft.prependText", value: `${item.label} ` })
-    } else {
-      commands.push({ type: "draft.setText", value: replaceTrigger(current, "/", `${item.label} `) })
-    }
+    commands.push({
+      type: "draft.setText",
+      value:
+        state.popover.type === "command-menu"
+          ? current.trim()
+            ? `${item.label} ${current.trim()}`
+            : `${item.label} `
+          : replaceTrigger(current, "/", `${item.label} `),
+    })
   } else {
     commands.push({ type: "mention.add", item })
   }
-  if (refocusEditor) commands.push({ type: "focus.editor" })
+  commands.push({ type: "focus.editor" })
   return changed({ ...state, popover: { type: "closed" }, focus: "editor" }, commands)
 }
 
@@ -240,15 +231,11 @@ function promptText(persisted: PromptInputV2PersistedState) {
   return persisted.prompt.map((part) => (part.type === "text" ? part.content : "")).join("")
 }
 
-function promptValue(persisted: PromptInputV2PersistedState) {
-  return persisted.prompt.map((part) => ("content" in part ? part.content : "")).join("")
-}
-
 function populated(persisted: PromptInputV2PersistedState) {
   return (
     !!promptText(persisted).trim() ||
     persisted.context.items.length > 0 ||
-    persisted.prompt.some((part) => part.type === "file" || part.type === "agent" || part.type === "image")
+    persisted.prompt.some((part) => part.type === "file" || part.type === "image")
   )
 }
 

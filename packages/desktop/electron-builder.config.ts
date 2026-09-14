@@ -45,8 +45,17 @@ const getBase = (identity: (typeof DESKTOP_IDENTITIES)[keyof typeof DESKTOP_IDEN
     name: DESKTOP_PACKAGE_NAME,
     desktopName: `${identity.appId}.desktop`,
   },
-  files: ["out/**/*", "resources/**/*"],
+  files: ["out/**/*", "resources/**/*", "!resources/opencode-cli*"],
   extraResources: [
+    ...(channel === "dev"
+      ? [
+          {
+            from: "resources/",
+            to: "",
+            filter: ["opencode-cli*"],
+          },
+        ]
+      : []),
     {
       from: "native/",
       to: "native/",
