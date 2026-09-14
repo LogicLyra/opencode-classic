@@ -11,6 +11,10 @@ const updaterHandler = (_: unknown, state: UpdaterState) => {
 }
 
 const api: ElectronAPI = {
+  chatImport: {
+    preview: (chooseFile) => ipcRenderer.invoke("chat-import-preview", chooseFile),
+    confirm: (token) => ipcRenderer.invoke("chat-import-confirm", token),
+  },
   killSidecar: () => ipcRenderer.invoke("kill-sidecar"),
   installCli: () => ipcRenderer.invoke("install-cli"),
   awaitInitialization: () => ipcRenderer.invoke("await-initialization"),

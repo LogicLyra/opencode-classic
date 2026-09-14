@@ -45,6 +45,45 @@
 
 ---
 
+### Bringing chats from OpenCode
+
+OpenCode Classic Desktop uses a separate database for its built-in server.
+On first launch, or under **Settings > Chat import**, choose **Check default
+OpenCode database** or select a `.db` file. Close OpenCode first, review the
+source, destination and counts, then choose **Import eligible chats**.
+
+- The default source is `$XDG_DATA_HOME/opencode/opencode.db`, normally
+  `~/.local/share/opencode/opencode.db`. Choose a file for custom paths or
+  development-channel databases. The destination is the active built-in
+  desktop server's database under the Classic desktop profile's `sidecar`
+  directory. Remote and experimental background-server connections are not
+  supported by this importer.
+- The initial importer supports matching SQLite schemas and migration histories.
+  It does not migrate source files or import legacy JSON storage. If compatibility
+  checks fail, use compatible OpenCode and Classic versions and preview again.
+- Completed local chats retain their IDs, titles, timestamps, messages, parts,
+  v2 history, todos and original project paths. Existing chat IDs are skipped
+  as a whole; re-importing does not update an already imported chat. The source
+  is read-only, including its WAL history, and each import commits atomically.
+- Chats with queued prompts, unfinished work or explicit workspace placement
+  are excluded and counted. Importing never starts a prompt or runs a command.
+  Credentials, account state, permission grants, project commands, share
+  ownership, external attachments, Git snapshots and desktop drafts are not
+  copied. Sign in separately and keep your project folders at their original
+  paths. Historical undo snapshots are unavailable; embedded attachment data
+  remains in the transcript, while external files must still exist.
+- Open the original project folder in Classic to see its imported chats.
+  This is a one-time copy, not ongoing synchronization between applications.
+
+The standalone Classic CLI still uses OpenCode's default XDG roots unless you
+override them. Its `uninstall` command preserves data, credentials, configuration,
+cache and state by default, including with `--force`. Deleting those shared roots
+requires `--remove-shared-data`; `--keep-data` and `--keep-config` override that
+request for their respective roots. Use `uninstall --dry-run` to review paths.
+Upstream's own uninstall may still delete shared CLI data. The fork refuses to
+open databases containing unknown migrations; update Classic rather than editing
+or deleting a migration journal.
+
 ### Installation
 
 ```bash

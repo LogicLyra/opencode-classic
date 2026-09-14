@@ -7,11 +7,12 @@ import fs from "fs/promises"
 import path from "path"
 import os from "os"
 import { Filesystem } from "@/util/filesystem"
-import { Process } from "@/util/process"
+import { retainedStorage, uninstallOptions } from "./uninstall-policy"
 
 interface UninstallArgs {
-  keepConfig: boolean
-  keepData: boolean
+  keepConfig?: boolean
+  keepData?: boolean
+  removeSharedData: boolean
   dryRun: boolean
   force: boolean
 }
@@ -24,38 +25,18 @@ interface RemovalTargets {
 
 export const UninstallCommand = {
   command: "uninstall",
-  describe: "uninstall opencode and remove all related files",
-  builder: (yargs: Argv) =>
-    yargs
-      .option("keep-config", {
-        alias: "c",
-        type: "boolean",
-        describe: "keep configuration files",
-        default: false,
-      })
-      .option("keep-data", {
-        alias: "d",
-        type: "boolean",
-        describe: "keep session data and snapshots",
-        default: false,
-      })
-      .option("dry-run", {
-        type: "boolean",
-        describe: "show what would be removed without removing",
-        default: false,
-      })
-      .option("force", {
-        alias: "f",
-        type: "boolean",
-        describe: "skip confirmation prompts",
-        default: false,
-      }),
+  describe: "uninstall OpenCode Classic while preserving shared storage by default",
+  builder: (yargs: Argv) => yargs.options(uninstallOptions),
 
   handler: async (args: UninstallArgs) => {
     UI.empty()
     UI.println(UI.logo("  "))
     UI.empty()
-    prompts.intro("Uninstall OpenCode")
+    prompts.intro("Uninstall OpenCode Classic")
+    prompts.log.warn(
+      "CLI data, credentials, configuration, cache and state may be shared with upstream OpenCode. " +
+        "They are kept unless --remove-shared-data is explicitly supplied; --force does not delete them.",
+    )
 
     const method = await Installation.method()
     prompts.log.info(`Installation method: ${method}`)
@@ -88,11 +69,12 @@ export const UninstallCommand = {
 }
 
 async function collectRemovalTargets(args: UninstallArgs, method: Installation.Method): Promise<RemovalTargets> {
+  const keep = retainedStorage(args)
   const directories: RemovalTargets["directories"] = [
-    { path: Global.Path.data, label: "Data", keep: args.keepData },
-    { path: Global.Path.cache, label: "Cache", keep: false },
-    { path: Global.Path.config, label: "Config", keep: args.keepConfig },
-    { path: Global.Path.state, label: "State", keep: false },
+    { path: Global.Path.data, label: "Data", keep: keep.data },
+    { path: Global.Path.cache, label: "Cache", keep: keep.cache },
+    { path: Global.Path.config, label: "Config", keep: keep.config },
+    { path: Global.Path.state, label: "State", keep: keep.state },
   ]
 
   const shellConfig = method === "curl" ? await getShellConfigFile() : null
@@ -102,7 +84,7 @@ async function collectRemovalTargets(args: UninstallArgs, method: Installation.M
 }
 
 async function showRemovalSummary(targets: RemovalTargets, method: Installation.Method) {
-  prompts.log.message("The following will be removed:")
+  prompts.log.message("Removal plan (shared storage marked keeping is preserved):")
 
   for (const dir of targets.directories) {
     const exists = await fs
@@ -128,16 +110,7 @@ async function showRemovalSummary(targets: RemovalTargets, method: Installation.
   }
 
   if (method !== "curl" && method !== "unknown") {
-    const cmds: Record<string, string> = {
-      npm: "npm uninstall -g opencode-ai",
-      pnpm: "pnpm uninstall -g opencode-ai",
-      bun: "bun remove -g opencode-ai",
-      yarn: "yarn global remove opencode-ai",
-      brew: "brew uninstall opencode",
-      choco: "choco uninstall opencode",
-      scoop: "scoop uninstall opencode",
-    }
-    prompts.log.info(`  ✓ Package: ${cmds[method] || method}`)
+    prompts.log.info(`Package managed by ${method}: remove OpenCode Classic with your package manager.`)
   }
 }
 
@@ -147,7 +120,7 @@ async function executeUninstall(method: Installation.Method, targets: RemovalTar
 
   for (const dir of targets.directories) {
     if (dir.keep) {
-      prompts.log.step(`Skipping ${dir.label} (--keep-${dir.label.toLowerCase()})`)
+      prompts.log.step(`Keeping shared ${dir.label}`)
       continue
     }
 
@@ -179,34 +152,7 @@ async function executeUninstall(method: Installation.Method, targets: RemovalTar
   }
 
   if (method !== "curl" && method !== "unknown") {
-    const cmds: Record<string, string[]> = {
-      npm: ["npm", "uninstall", "-g", "opencode-ai"],
-      pnpm: ["pnpm", "uninstall", "-g", "opencode-ai"],
-      bun: ["bun", "remove", "-g", "opencode-ai"],
-      yarn: ["yarn", "global", "remove", "opencode-ai"],
-      brew: ["brew", "uninstall", "opencode"],
-      choco: ["choco", "uninstall", "opencode"],
-      scoop: ["scoop", "uninstall", "opencode"],
-    }
-
-    const cmd = cmds[method]
-    if (cmd) {
-      spinner.start(`Running ${cmd.join(" ")}...`)
-      const result = await Process.run(method === "choco" ? ["choco", "uninstall", "opencode", "-y", "-r"] : cmd, {
-        nothrow: true,
-      })
-      if (result.code !== 0) {
-        spinner.stop(`Package manager uninstall failed: exit code ${result.code}`, 1)
-        const text = `${result.stdout.toString("utf8")}\n${result.stderr.toString("utf8")}`
-        if (method === "choco" && text.includes("not running from an elevated command shell")) {
-          prompts.log.warn(`You may need to run '${cmd.join(" ")}' from an elevated command shell`)
-        } else {
-          prompts.log.warn(`You may need to run manually: ${cmd.join(" ")}`)
-        }
-      } else {
-        spinner.stop("Package removed")
-      }
-    }
+    prompts.log.info(`Use ${method} to remove the installed Classic package. No upstream package was removed.`)
   }
 
   if (method === "curl" && targets.binary) {
@@ -229,7 +175,7 @@ async function executeUninstall(method: Installation.Method, targets: RemovalTar
   }
 
   UI.empty()
-  prompts.log.success("Thank you for using OpenCode!")
+  prompts.log.success("Thank you for using OpenCode Classic!")
 }
 
 async function getShellConfigFile(): Promise<string | null> {

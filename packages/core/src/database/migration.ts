@@ -15,9 +15,46 @@ export type Migration = {
   up: (tx: Transaction) => Effect.Effect<void, unknown>
 }
 
+// fork: a newer (or divergent) OpenCode must not silently upgrade a database
+// past this binary's knowledge. Read the journal before any migration writes.
+export function assertCompatible(db: Database) {
+  return Effect.gen(function* () {
+    const known = new Set([...migrations.map((migration) => migration.id), "20260530232709_lovely_romulus"])
+    const tables = yield* db.all<{ name: string }>(sql`SELECT name FROM sqlite_master WHERE type = 'table'`)
+    const completed = tables.some((table) => table.name === "migration")
+      ? yield* db.all<{ id: string }>(sql`SELECT id FROM migration`)
+      : []
+    const reject = () =>
+      Effect.die(
+        new Error(
+          "OpenCode Classic cannot open this database: its migration history includes an unknown migration. " +
+            "Update OpenCode Classic to a compatible version. Do not delete or edit the migration journal.",
+        ),
+      )
+    if (completed.length > 0) {
+      if (completed.some((row) => !known.has(row.id))) return yield* reject()
+      return
+    }
+    if (!tables.some((table) => table.name === "__drizzle_migrations")) return
+    const columns = yield* db.all<{ name: string }>(sql`SELECT name FROM pragma_table_info('__drizzle_migrations')`)
+    if (columns.some((column) => column.name === "name")) {
+      const entries = yield* db.all<{ name: string }>(sql`SELECT name FROM __drizzle_migrations`)
+      if (entries.some((row) => !known.has(row.name))) return yield* reject()
+      return
+    }
+    const entries = yield* db.all<{ prefix: string | null }>(sql`
+      SELECT strftime('%Y%m%d%H%M%S', created_at / 1000, 'unixepoch') AS prefix FROM __drizzle_migrations
+    `)
+    if (entries.some((row) => !migrations.some((migration) => migration.id.startsWith(`${row.prefix}_`)))) {
+      return yield* reject()
+    }
+  })
+}
+
 export function apply(db: Database) {
   return lock.withPermit(
     Effect.gen(function* () {
+      yield* assertCompatible(db)
       const tables = yield* db.all<{ name: string }>(
         sql`SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'`,
       )

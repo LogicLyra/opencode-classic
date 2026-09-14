@@ -25,6 +25,7 @@ import { createUpdaterSubscriptions } from "./updater-subscriptions"
 import { createDesktopDraftStore } from "./draft-store"
 import { nativeT } from "./native-translations"
 import { handleTrusted, onTrusted } from "./trusted-ipc"
+import { createDesktopChatImport } from "./chat-import"
 
 const pickerFilters = (ext?: string[]) => {
   if (!ext || ext.length === 0) return undefined
@@ -56,6 +57,23 @@ type Deps = {
 }
 
 export function registerIpcHandlers(deps: Deps) {
+  const chatImport = createDesktopChatImport()
+  const chatImportWindows = new Set<number>()
+  handleTrusted("chat-import-preview", (event, chooseFile: unknown) => {
+    const id = event.sender.id
+    if (!chatImportWindows.has(id)) {
+      chatImportWindows.add(id)
+      event.sender.once("destroyed", () => {
+        chatImport.clear(id)
+        chatImportWindows.delete(id)
+      })
+    }
+    return chatImport.preview(id, chooseFile).then((result) => {
+      if (event.sender.isDestroyed()) chatImport.clear(id)
+      return result
+    })
+  })
+  handleTrusted("chat-import-confirm", (event, token: unknown) => chatImport.confirm(event.sender.id, token))
   const drafts = createDesktopDraftStore(join(app.getPath("userData"), "drafts.sqlite"))
   const updaterSubscriptions = createUpdaterSubscriptions()
   app.once("will-quit", updaterSubscriptions.clear)
