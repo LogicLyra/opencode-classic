@@ -191,18 +191,20 @@ Options:
 exports[`opencode CLI help-text snapshots every documented command emits stable help text: opencode uninstall --help 1`] = `
 "opencode uninstall
 
-uninstall opencode and remove all related files
+uninstall OpenCode Classic while preserving shared storage by default
 
 Options:
-  -h, --help         show help                                                             [boolean]
-  -v, --version      show version number                                                   [boolean]
-      --print-logs   print logs to stderr                                                  [boolean]
-      --log-level    log level                  [string] [choices: "DEBUG", "INFO", "WARN", "ERROR"]
-      --pure         run without external plugins                                          [boolean]
-  -c, --keep-config  keep configuration files                             [boolean] [default: false]
-  -d, --keep-data    keep session data and snapshots                      [boolean] [default: false]
-      --dry-run      show what would be removed without removing          [boolean] [default: false]
-  -f, --force        skip confirmation prompts                            [boolean] [default: false]"
+  -h, --help                show help                                                      [boolean]
+  -v, --version             show version number                                            [boolean]
+      --print-logs          print logs to stderr                                           [boolean]
+      --log-level           log level           [string] [choices: "DEBUG", "INFO", "WARN", "ERROR"]
+      --pure                run without external plugins                                   [boolean]
+  -c, --keep-config         keep shared configuration files                                [boolean]
+  -d, --keep-data           keep shared sessions, credentials and snapshots                [boolean]
+      --remove-shared-data  delete shared OpenCode storage (also affects upstream OpenCode)
+                                                                          [boolean] [default: false]
+      --dry-run             show what would be removed without removing   [boolean] [default: false]
+  -f, --force               skip confirmation prompts                     [boolean] [default: false]"
 `;
 
 exports[`opencode CLI help-text snapshots every documented command emits stable help text: opencode serve --help 1`] = `
