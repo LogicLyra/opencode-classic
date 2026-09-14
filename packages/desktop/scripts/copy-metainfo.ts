@@ -5,7 +5,7 @@ const arg = process.argv[2]
 const channel = arg === "dev" || arg === "beta" || arg === "prod" ? arg : resolveChannel()
 
 const identity = DESKTOP_IDENTITIES[channel]
-const summary = `Open source AI coding agent${channel !== "prod" ? ` (${channel})` : ""}`
+const summary = `Open source AI coding agent with the classic desktop layout${channel !== "prod" ? ` (${channel})` : ""}`
 const repository = `https://github.com/${DESKTOP_RELEASE_REPOSITORY.owner}/${DESKTOP_RELEASE_REPOSITORY.repo}`
 
 const xml = `<?xml version="1.0" encoding="UTF-8"?>
@@ -25,6 +25,11 @@ const xml = `<?xml version="1.0" encoding="UTF-8"?>
   <description>
     <p>
       OpenCode is an open source agent that helps you write and run code with any AI model.
+    </p>
+    <p>
+      OpenCode Classic is an unofficial Linux-focused build that defaults to the classic desktop
+      layout; the redesigned layout stays available under Settings, and releases are maintained
+      independently from upstream.
     </p>
   </description>
 
