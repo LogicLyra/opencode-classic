@@ -12,7 +12,7 @@ import { DialogSelectModelUnpaidV2 } from "@/components/dialog-select-model-unpa
 import type { PromptInputProps } from "@/components/prompt-input/contracts"
 import { normalizePromptHistoryEntry, promptLength, type PromptHistoryComment } from "@/components/prompt-input/history"
 import { createPersistedPromptInputHistory } from "@/components/prompt-input/history-store"
-import { promptPlaceholder } from "@/components/prompt-input/placeholder"
+import { promptDesignPlaceholder, promptPlaceholder } from "@/components/prompt-input/placeholder"
 import { createPromptSubmit } from "@/components/prompt-input/submit"
 import { selectionFromLines, type SelectedLineRange, useFile } from "@/context/file"
 import { useComments } from "@/context/comments"
@@ -55,24 +55,9 @@ export function PromptInputV2Composer(props: PromptInputV2ComposerProps) {
         controller={props.controller}
         borderUnderlay={props.borderUnderlay}
         class={props.class}
-        labels={{
-          emptyResults: language.t("prompt.popover.emptyResults"),
-          commands: language.t("prompt.menu.commands"),
-          dropFiles: language.t("prompt.dropzone.label"),
-          prompt: language.t("prompt.mode.normal"),
-          removeAttachment: language.t("prompt.attachment.remove"),
-          placeholderNormal: language.t("prompt.placeholder.simple"),
-          placeholderShell: language.t("prompt.placeholder.shell", { example: "git status" }),
-          addFiles: language.t("prompt.menu.addImagesAndFiles"),
-          imagesAndFiles: language.t("prompt.menu.imagesAndFiles"),
-          context: language.t("prompt.menu.context"),
-          shellCommand: language.t("prompt.menu.shellCommand"),
-          chooseAgent: language.t("command.agent.cycle"),
-          chooseModel: language.t("command.model.choose"),
-          chooseVariant: language.t("command.model.variant.cycle"),
-          send: language.t("prompt.action.send"),
-          stop: language.t("prompt.action.stop"),
-        }}
+        variantControlVisible={!props.controller.model.loading}
+        attachKeybind={command.keybindParts("file.attach")}
+        attachShortcut={command.keybind("file.attach")}
         modelControl={
           <PromptInputV2ModelControl
             loading={props.controller.model.loading}
@@ -152,6 +137,10 @@ export function usePromptInputV2Controller(props: PromptInputV2ControllerProps):
       t: (key, params) => language.t(key as Parameters<typeof language.t>[0], params as never),
     }),
   )
+  const designPlaceholder = () =>
+    promptDesignPlaceholder(mode(), placeholder(), (key, params) =>
+      language.t(key as Parameters<typeof language.t>[0], params as never),
+    )
 
   const historyComments = () => {
     const byID = new Map(comments.all().map((item) => [`${item.file}\n${item.id}`, item] as const))
@@ -322,7 +311,6 @@ export function usePromptInputV2Controller(props: PromptInputV2ControllerProps):
     slashCommands().map((item) => ({
       id: item.id,
       kind: "command",
-      commandMode: item.type === "builtin" ? "execute" : "insert",
       label: `/${item.trigger}`,
       trigger: item.trigger,
       title: item.title,
@@ -359,7 +347,7 @@ export function usePromptInputV2Controller(props: PromptInputV2ControllerProps):
       if (item?.commentID) comments.remove(item.path, item.commentID)
     },
     openAttachment: (attachment) =>
-      dialog.show(() => <ImagePreview src={attachment.dataUrl} alt={attachment.filename} />),
+      dialog.show(() => <ImagePreview src={attachment.blob.url} alt={attachment.filename} />),
     openContext(key) {
       const item = controller.contextItem(key)
       if (item) openComment(item, props, sync, layout, files, comments)
@@ -383,6 +371,7 @@ export function usePromptInputV2Controller(props: PromptInputV2ControllerProps):
           title: language.t("prompt.toast.pasteUnsupported.title"),
           description: language.t("prompt.toast.pasteUnsupported.description"),
         }),
+      duplicate: () => showToast({ title: language.t("prompt.toast.attachmentDuplicate.title") }),
       onError: (error) =>
         showToast({
           variant: "error",
@@ -391,19 +380,25 @@ export function usePromptInputV2Controller(props: PromptInputV2ControllerProps):
         }),
       readClipboardImage: platform.readClipboardImage,
       getPathForFile: platform.getPathForFile,
+      store: platform.draftStore?.putBlob,
     },
     view: {
-      placeholder,
-      agent: {
-        visible: () => props.controls.agents.visible && props.controls.agents.options.length > 0,
-        options: () => props.controls.agents.options.map((name) => ({ id: name, label: name })),
-        current: () => props.controls.agents.current,
-        onSelect: props.controls.agents.select,
+      placeholder: designPlaceholder,
+      get agent() {
+        return props.controls.agents.visible && props.controls.agents.options.length > 0
+          ? {
+              options: () => props.controls.agents.options.map((name) => ({ id: name, label: name })),
+              current: () => props.controls.agents.current,
+              onSelect: (value: string) => props.controls.agents.select(value),
+              keybind: () => command.keybindParts("agent.cycle"),
+            }
+          : undefined
       },
       variant: {
         options: () => variants().map((value) => ({ id: value, label: value })),
         current: () => props.controls.model.selection.variant.current() ?? "default",
         onSelect: (value) => props.controls.model.selection.variant.set(value === "default" ? undefined : value),
+        keybind: () => command.keybindParts("model.variant.cycle"),
       },
       submit: {
         stopping,

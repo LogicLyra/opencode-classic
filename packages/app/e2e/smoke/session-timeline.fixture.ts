@@ -310,6 +310,6 @@ export function pageMessages(sessionID: string, limit: number, before?: string) 
   const start = Math.max(0, end - limit)
   return {
     items: messages.slice(start, end),
-    cursor: start > 0 ? messages[start]!.info.id : undefined,
+    cursor: start > 0 ? messages[start].info.id : undefined,
   }
 }

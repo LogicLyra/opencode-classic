@@ -1,5 +1,5 @@
 import { createStore, reconcile } from "solid-js/store"
-import { createEffect, createMemo, createSignal, onCleanup } from "solid-js"
+import { batch, createEffect, createMemo, createSignal, onCleanup } from "solid-js"
 import { createSimpleContext } from "@opencode-ai/ui/context"
 import { persisted } from "@/utils/persist"
 import { usePlatform } from "@/context/platform"
@@ -36,6 +36,7 @@ export interface Settings {
     mobileTitlebarPosition: "top" | "bottom"
     newLayoutDesigns?: boolean
     layoutTransitionEligible?: boolean
+    agentVisibilityInitialized?: boolean
     newInterfaceNoticeDismissed?: boolean
     shouldDisplayTabsToast?: boolean
   }
@@ -59,7 +60,8 @@ export const terminalDefault = "JetBrainsMono Nerd Font Mono"
 const legacyNewLayoutDesignsDefault = import.meta.env.VITE_OPENCODE_CHANNEL !== "prod"
 export const newLayoutDesignsDefault = true
 // Existing users can switch layouts until local midnight on this date. Set new Date(YYYY, M-1, D) to show.
-export const oldInterfaceSunset = new Date(2026, 8, 14)
+// fork: the classic interface is preserved indefinitely; no sunset, no forced retirement
+export let oldInterfaceSunset: Date | null = null
 const newLayoutDesignsUpgradeCutoff = "1.17.19"
 
 function compareVersions(a: string, b: string) {
@@ -91,6 +93,11 @@ export function shouldDisplayTabsToast(
 
 export function hasExistingWebState(settings: Promise<string> | string | null, previousVersion: string | undefined) {
   return settings !== null || previousVersion !== undefined
+}
+
+export function initialAgentVisibility(initialized: boolean | undefined, existing: boolean, previousVersion?: string) {
+  if (initialized === true) return
+  return existing || previousVersion !== undefined
 }
 
 export function shouldEnableNewLayout(previous: string | undefined, current: string | undefined) {
@@ -252,7 +259,8 @@ export const { use: useSettings, provider: SettingsProvider } = createSimpleCont
         : false,
     )
     const layoutTransition = createMemo(() =>
-      layoutTransitionState(!!sunset, layoutTransitionEligible(), oldInterfaceRetired(), newInterfaceNoticeDismissed()),
+      // fork: keep the interface toggle selectable for everyone; no sunset notice
+      layoutTransitionState(true, true, oldInterfaceRetired(), newInterfaceNoticeDismissed()),
     )
     const newLayoutDesigns = createMemo(() => {
       if (layoutUpgrade()) return true
@@ -271,6 +279,14 @@ export const { use: useSettings, provider: SettingsProvider } = createSimpleCont
       )
     })
     const visible = (preference: () => boolean) => createMemo(() => !newLayoutDesigns() || preference())
+    const initializeAgentVisibility = (existing: boolean) => {
+      const initial = initialAgentVisibility(store.general?.agentVisibilityInitialized, existing, launchState.previous)
+      if (initial === undefined) return
+      batch(() => {
+        setStore("general", "showCustomAgents", initial)
+        setStore("general", "agentVisibilityInitialized", true)
+      })
+    }
 
     if (sunset && !oldInterfaceRetired()) {
       const timeout = { current: undefined as ReturnType<typeof setTimeout> | undefined }
@@ -299,8 +315,9 @@ export const { use: useSettings, provider: SettingsProvider } = createSimpleCont
 
     createEffect(() => {
       if (!ready() || !launchState.classified || platform.platform !== "web") return
-      if (layoutTransitionClassified()) return
-      setStore("general", "layoutTransitionEligible", hasExistingWebState(settingsInit, launchState.previous))
+      const existing = hasExistingWebState(settingsInit, launchState.previous)
+      if (!layoutTransitionClassified()) setStore("general", "layoutTransitionEligible", existing)
+      initializeAgentVisibility(existing)
     })
 
     createEffect(() => {
@@ -426,6 +443,7 @@ export const { use: useSettings, provider: SettingsProvider } = createSimpleCont
           if (typeof current === "boolean") return
           setStore("general", "layoutTransitionEligible", eligible)
         },
+        initializeAgentVisibility,
         layoutTransitionAvailable: createMemo(() => ready() && layoutTransition().available),
         newInterfaceNoticeVisible: createMemo(() => ready() && layoutTransition().notice),
         dismissNewInterfaceNotice() {

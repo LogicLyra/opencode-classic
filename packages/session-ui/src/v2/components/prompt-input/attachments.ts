@@ -1,7 +1,6 @@
 import { onMount } from "solid-js"
 import { makeEventListener } from "@solid-primitives/event-listener"
 import type { PromptInputV2Attachment, PromptInputV2Prompt } from "./types"
-import { promptInputV2EditorCursor } from "./cursor"
 
 const accepted = [
   "image/png",
@@ -75,9 +74,11 @@ export type PromptInputV2AttachmentConfig = {
   directory: () => string
   isDialogActive: () => boolean
   warn: () => void
+  duplicate: () => void
   onError: (error: unknown) => void
   readClipboardImage?: () => Promise<File | null>
   getPathForFile?: (file: File) => string
+  store?: (file: File) => Promise<{ id: string; url: string }>
 }
 
 export function createPromptInputV2Attachments(
@@ -93,24 +94,40 @@ export function createPromptInputV2Attachments(
     const prompt = input.capture()
     const editor = input.editor()
     if (!editor) return
-    return { prompt, cursor: prompt.cursor() ?? promptInputV2EditorCursor(editor) }
+    return { prompt, cursor: prompt.cursor() ?? cursorPosition(editor) }
   }
-  const add = async (file: File, toast = true, target = capture()) => {
+  const add = async (file: File, toast = true, target = capture(), clipboard = false) => {
     if (!target) return false
     const mime = await attachmentMime(file)
     if (!mime) {
       if (toast) input.warn()
       return false
     }
-    const url = await dataUrl(file, mime)
-    if (!url) return false
+    const blob = input.store ? await input.store(file) : await blobReference(file)
+    const sourcePath = input.getPathForFile?.(file) || undefined
+    // Native clipboard images arrive with a fresh timestamped filename on every paste, so identical
+    // clipboard content is matched on bytes alone.
+    const duplicate = target.prompt
+      .current()
+      .some(
+        (part) =>
+          part.type === "image" &&
+          part.blob.id === blob.id &&
+          (sourcePath
+            ? part.sourcePath === sourcePath
+            : !part.sourcePath && (clipboard || part.filename === file.name)),
+      )
+    if (duplicate) {
+      input.duplicate()
+      return true
+    }
     const attachment: PromptInputV2Attachment = {
       type: "image",
       id: globalThis.crypto?.randomUUID?.() ?? Math.random().toString(16).slice(2),
       filename: file.name,
-      sourcePath: input.getPathForFile?.(file) || undefined,
+      sourcePath,
       mime,
-      dataUrl: url,
+      blob,
     }
     target.prompt.set([...target.prompt.current(), attachment], target.cursor)
     return true
@@ -142,7 +159,7 @@ export function createPromptInputV2Attachments(
     const plainText = clipboardData.getData("text/plain") ?? ""
     if (input.readClipboardImage && !plainText) {
       const file = await input.readClipboardImage()
-      if (file && (await add(file, true, target))) return
+      if (file && (await add(file, true, target, true))) return
     }
     if (!plainText) return
     const text = plainText.includes("\r") ? plainText.replace(/\r\n?/g, "\n") : plainText
@@ -202,20 +219,14 @@ export function createPromptInputV2Attachments(
   }
 }
 
-function dataUrl(file: File, mime: string) {
-  return new Promise<string>((resolve) => {
-    const reader = new FileReader()
-    reader.addEventListener("error", () => resolve(""))
-    reader.addEventListener("load", () => {
-      const value = typeof reader.result === "string" ? reader.result : ""
-      const index = value.indexOf(",")
-      resolve(index === -1 ? value : `data:${mime};base64,${value.slice(index + 1)}`)
-    })
-    reader.readAsDataURL(file)
-  })
-}
-
 const imageMimes = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"])
+
+async function blobReference(file: File) {
+  const id = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", await file.arrayBuffer())))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("")
+  return { id, url: URL.createObjectURL(file) }
+}
 const imageExtensions = new Map([
   ["gif", "image/gif"],
   ["jpeg", "image/jpeg"],
@@ -248,6 +259,17 @@ async function attachmentMime(file: File) {
   const control = bytes.filter((byte) => byte < 9 || (byte > 13 && byte < 32)).length
   if (bytes.length > 0 && control / bytes.length > 0.3) return
   return "text/plain"
+}
+
+function cursorPosition(editor: HTMLElement) {
+  const selection = window.getSelection()
+  if (!selection || selection.rangeCount === 0) return 0
+  const range = selection.getRangeAt(0)
+  if (!editor.contains(range.startContainer)) return 0
+  const before = range.cloneRange()
+  before.selectNodeContents(editor)
+  before.setEnd(range.startContainer, range.startOffset)
+  return before.toString().replace(/\u200B/g, "").length
 }
 
 function largePaste(text: string) {

@@ -7,7 +7,6 @@ const command: PromptInputV2Suggestion = {
   kind: "command",
   label: "/review",
 }
-const executeCommand: PromptInputV2Suggestion = { ...command, id: "model", label: "/model", commandMode: "execute" }
 
 function persisted(value = ""): PromptInputV2PersistedState {
   return {
@@ -47,7 +46,7 @@ describe("prompt input v2 interaction machine", () => {
 
     const result = transitionPromptInputV2(
       createPromptInputV2InteractionState(),
-      { type: "input.changed", value, cursor: input.cursor, persist: false },
+      { type: "input.changed", value, persist: false },
       input,
     )
 
@@ -127,66 +126,8 @@ describe("prompt input v2 interaction machine", () => {
       persisted("existing text"),
     )
 
-    expect(selected.commands).toContainEqual({ type: "draft.prependText", value: "/review " })
-    expect(selected.commands).toContainEqual({ type: "focus.editor" })
+    expect(selected.commands).toContainEqual({ type: "draft.setText", value: "/review existing text" })
     expect(selected.state.popover).toEqual({ type: "closed" })
-  })
-
-  test("executes a menu command without mutating the draft or refocusing the editor", () => {
-    const state = {
-      ...createPromptInputV2InteractionState(),
-      popover: { type: "command-menu" as const, query: "" },
-      focus: "command-search" as const,
-    }
-
-    const selected = transitionPromptInputV2(
-      state,
-      { type: "popover.select", item: executeCommand },
-      persisted("existing text"),
-    )
-
-    expect(selected.commands).toEqual([])
-    expect(selected.state.popover).toEqual({ type: "closed" })
-  })
-
-  test("clears an inline command before executing it without refocusing", () => {
-    const state = {
-      ...createPromptInputV2InteractionState(),
-      popover: { type: "command-inline" as const, query: "model" },
-    }
-
-    const selected = transitionPromptInputV2(
-      state,
-      { type: "popover.select", item: executeCommand },
-      persisted("/model"),
-    )
-
-    expect(selected.commands).toEqual([{ type: "draft.clearText" }])
-  })
-
-  test("opens context by inserting at the persisted cursor", () => {
-    const result = transitionPromptInputV2(
-      createPromptInputV2InteractionState(),
-      { type: "context.open" },
-      { ...persisted("before after"), cursor: 7 },
-    )
-
-    expect(result.commands).toContainEqual({ type: "draft.insertText", value: "@" })
-    expect(result.state.popover).toEqual({ type: "context", query: "" })
-  })
-
-  test("treats an agent-only prompt as populated", () => {
-    const result = transitionPromptInputV2(
-      createPromptInputV2InteractionState(),
-      { type: "commands.open" },
-      {
-        prompt: [{ type: "agent", name: "explore", content: "@explore", start: 0, end: 8 }],
-        cursor: 8,
-        context: { items: [] },
-      },
-    )
-
-    expect(result.state.popover).toEqual({ type: "command-menu", query: "" })
   })
 
   test("stores selected context files as prompt file parts", () => {
