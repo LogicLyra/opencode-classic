@@ -1,13 +1,18 @@
-import { ServerConnection, useServer, useSettings, useTabs } from "@opencode-ai/app"
+import { DialogChatImport, ServerConnection, useServer, useSettings, useTabs } from "@opencode-ai/app"
+import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { onMount } from "solid-js"
 
 export function DesktopFirstLaunchOnboarding(props: { initialUrl: string; onLoaded: () => void }) {
   const server = useServer()
   const settings = useSettings()
   const tabs = useTabs()
+  const dialog = useDialog()
 
   onMount(() => {
-    void runFirstLaunchOnboarding().finally(props.onLoaded)
+    void runFirstLaunchOnboarding().then((offerImport) => {
+      props.onLoaded()
+      if (offerImport) void dialog.show(() => <DialogChatImport />)
+    })
   })
 
   async function runFirstLaunchOnboarding() {
@@ -45,6 +50,7 @@ export function DesktopFirstLaunchOnboarding(props: { initialUrl: string; onLoad
       server.projects.open(directory)
       server.projects.touch(directory)
       tabs.select(await tabs.newDraft({ server: server.key, directory }))
+      return navigator.userAgent.includes("Linux") && !!server.current && ServerConnection.builtin(server.current)
     } catch (error) {
       console.error("[desktop-onboarding] first launch onboarding failed", error)
     }

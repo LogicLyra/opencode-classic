@@ -22,7 +22,7 @@ type StopCommand = { type: "stop" }
 type SidecarCommand = StartCommand | StopCommand
 
 type SidecarMessage =
-  | { type: "ready" }
+  | { type: "ready"; databasePath: string }
   | { type: "stopped" }
   | { type: "error"; error: { message: string; stack?: string } }
 
@@ -54,7 +54,7 @@ async function start(command: StartCommand) {
     ensureLoopbackNoProxy()
     useSystemCertificates()
     useEnvProxy()
-    const { Server } = await import("virtual:opencode-server")
+    const { Server, Database } = await import("virtual:opencode-server")
 
     listener = await Server.listen({
       port: command.port,
@@ -63,7 +63,7 @@ async function start(command: StartCommand) {
       password: command.password,
       cors: ["oc://renderer"],
     })
-    parentPort.postMessage({ type: "ready" })
+    parentPort.postMessage({ type: "ready", databasePath: Database.path() })
   } catch (error) {
     parentPort.postMessage({ type: "error", error: serializeError(error) })
     setImmediate(() => process.exit(1))

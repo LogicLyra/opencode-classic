@@ -1,4 +1,4 @@
-import { Component, createSignal, startTransition } from "solid-js"
+import { Component, Show, createSignal, startTransition } from "solid-js"
 import { Dialog } from "@opencode-ai/ui/dialog"
 import { Tabs } from "@opencode-ai/ui/tabs"
 import { Icon } from "@opencode-ai/ui/icon"
@@ -10,6 +10,7 @@ import { SettingsKeybinds } from "./settings-keybinds"
 import { SettingsProviders } from "./settings-providers"
 import { SettingsModels } from "./settings-models"
 import { SettingsServers } from "./settings-servers"
+import { ChatImportPanel } from "./chat-import"
 
 export const DialogSettings: Component<{ defaultValue?: string }> = (props) => {
   const language = useLanguage()
@@ -49,6 +50,12 @@ export const DialogSettings: Component<{ defaultValue?: string }> = (props) => {
                       <Icon name="server" />
                       {language.t("status.popover.tab.servers")}
                     </Tabs.Trigger>
+                    <Show when={platform.chatImport}>
+                      <Tabs.Trigger value="chat-import">
+                        <Icon name="folder" />
+                        {language.t("chatImport.tab")}
+                      </Tabs.Trigger>
+                    </Show>
                   </div>
                 </div>
 
@@ -88,6 +95,11 @@ export const DialogSettings: Component<{ defaultValue?: string }> = (props) => {
         <Tabs.Content value="models" class="no-scrollbar">
           <SettingsModels />
         </Tabs.Content>
+        <Show when={platform.chatImport}>
+          <Tabs.Content value="chat-import" class="no-scrollbar">
+            <ChatImportPanel />
+          </Tabs.Content>
+        </Show>
       </Tabs>
     </Dialog>
   )

@@ -11,7 +11,7 @@ import { createIsolatedSidecarEnv } from "./sidecar-env"
 export type HealthCheck = { wait: Promise<void> }
 
 type SidecarMessage =
-  | { type: "ready" }
+  | { type: "ready"; databasePath: string }
   | { type: "stopped" }
   | { type: "error"; error: { message: string; stack?: string } }
 
@@ -20,6 +20,11 @@ export type SidecarListener = { stop: () => Promise<void> }
 const SIDECAR_SERVICE_NAME = "opencode server"
 const SIDECAR_START_STALL_TIMEOUT = 60_000
 const SIDECAR_STOP_TIMEOUT = 6_000
+
+let localDatabasePath: string | undefined
+export function getLocalDatabasePath() {
+  return localDatabasePath
+}
 
 type SpawnLocalServerOptions = {
   userDataPath: string
@@ -78,6 +83,7 @@ export async function spawnLocalServer(
 
   app.on("child-process-gone", onProcessGone)
   child.once("exit", (code) => {
+    localDatabasePath = undefined
     exited = true
     app.off("child-process-gone", onProcessGone)
     options.onExit?.(code)
@@ -109,6 +115,7 @@ export async function spawnLocalServer(
     const onMessage = (message: SidecarMessage) => {
       if (message.type === "ready") {
         if (done) return
+        localDatabasePath = message.databasePath
         done = true
         cleanup()
         resolve()
