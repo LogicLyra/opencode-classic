@@ -94,7 +94,10 @@ describe("global HttpApi", () => {
 
   external.live("rejects upgrades managed by upstream package channels", () =>
     Effect.gen(function* () {
-      const response = yield* HttpClient.post(GlobalPaths.upgrade)
+      const response = yield* HttpClientRequest.post(GlobalPaths.upgrade).pipe(
+        HttpClientRequest.bodyJsonUnsafe({ target: "9.9.9" }),
+        HttpClient.execute,
+      )
 
       expect(response.status).toBe(400)
       expect(yield* response.json).toEqual({
