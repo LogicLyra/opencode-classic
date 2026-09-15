@@ -42,6 +42,7 @@ export default defineConfig({
           index: "src/main/index.ts",
           sidecar: "src/main/sidecar.ts",
           "chat-import-worker": "src/main/chat-import-worker.ts",
+          "profile-import-worker": "src/main/profile-import-worker.ts",
         },
         // Keep this identical to electron-vite's Node 20.11+ shim. Its regex insertion can
         // corrupt bundled TypeScript, while a Rollup banner places the shim safely.

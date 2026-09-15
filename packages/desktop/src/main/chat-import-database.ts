@@ -55,7 +55,7 @@ export function importChatDatabase(input: { source: string; destination: string;
       destination.exec(input.commit ? "BEGIN IMMEDIATE" : "BEGIN")
       let committed = false
       try {
-        const columns = validate(source, destination)
+        const columns = validateChatDatabases(source, destination)
         const sessions = source.prepare("SELECT * FROM session ORDER BY id").all() as Row[]
         const existing = new Set((destination.prepare("SELECT id FROM session").all() as Row[]).map((row) => row.id))
         const eligible = sessions.filter((row) => !existing.has(row.id) && completed(source, row))
@@ -152,11 +152,15 @@ export function importChatDatabase(input: { source: string; destination: string;
   }
 }
 
-function quote(value: string) {
+export function quote(value: string) {
   return `"${value.replaceAll('"', '""')}"`
 }
 
-function validate(source: DatabaseSync, destination: DatabaseSync) {
+export function validateChatDatabases(
+  source: DatabaseSync,
+  destination: DatabaseSync,
+  names: readonly string[] = tables,
+) {
   const journal = (db: DatabaseSync) => {
     if (!db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'migration'").get()) {
       throw new ChatImportFailure("incompatible")
@@ -170,7 +174,7 @@ function validate(source: DatabaseSync, destination: DatabaseSync) {
     throw new ChatImportFailure("incompatible")
   }
   const columns = Object.fromEntries(
-    tables.map((table) => {
+    names.map((table) => {
       for (const db of [source, destination]) {
         if (!db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(table)) {
           throw new ChatImportFailure("incompatible")
@@ -197,7 +201,7 @@ function validate(source: DatabaseSync, destination: DatabaseSync) {
       }
       return [table, target.map((column) => String(column.name))]
     }),
-  ) as Record<Table, string[]>
+  ) as Record<string, string[]>
 
   if (source.prepare("PRAGMA quick_check").get()?.quick_check !== "ok") throw new ChatImportFailure("invalid")
   if (source.prepare("PRAGMA foreign_key_check").get()) throw new ChatImportFailure("invalid")
@@ -257,7 +261,7 @@ function completed(db: DatabaseSync, session: Row) {
   return true
 }
 
-function validateHistory(db: DatabaseSync, session: Row) {
+export function validateHistory(db: DatabaseSync, session: Row) {
   if (typeof session.id !== "string" || !session.id.startsWith("ses_")) throw new ChatImportFailure("invalid")
   const sequence = db.prepare("SELECT seq FROM event_sequence WHERE aggregate_id = ?").get(session.id)
   const last = db

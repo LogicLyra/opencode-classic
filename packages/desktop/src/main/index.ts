@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto"
-import { mkdirSync, rmSync } from "node:fs"
+import { existsSync, mkdirSync, rmSync } from "node:fs"
 import * as http from "node:http"
 import { createServer } from "node:net"
 import { homedir, tmpdir } from "node:os"
@@ -192,6 +192,16 @@ const main = Effect.gen(function* () {
   }
 
   const shellEnv = preferAppEnv(app.getPath("userData"))
+  if (
+    [".profile-import.json", ".profile-import-scratch.json"].some((name) =>
+      existsSync(join(app.getPath("userData"), name)),
+    )
+  ) {
+    const { cleanupProfileScratch } = yield* Effect.promise(() => import("./profile-import-scratch"))
+    cleanupProfileScratch(app.getPath("userData"))
+    const { recoverProfileImport } = yield* Effect.promise(() => import("./profile-import-journal"))
+    recoverProfileImport(app.getPath("userData"))
+  }
 
   app.on("second-instance", (_event: Event, argv: string[]) => {
     const urls = argv.map(normalizeDesktopDeepLink).filter((url): url is string => Boolean(url))

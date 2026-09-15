@@ -383,7 +383,7 @@
     },
     "packages/desktop": {
       "name": "@opencode-ai/desktop",
-      "version": "1.18.30",
+      "version": "1.18.31",
       "dependencies": {
         "@zip.js/zip.js": "2.7.62",
         "drizzle-orm": "catalog:",
@@ -413,6 +413,7 @@
         "electron": "42.3.3",
         "electron-builder": "26.15.2",
         "electron-vite": "^5",
+        "jsonc-parser": "3.3.1",
         "solid-js": "catalog:",
         "sury": "11.0.0-alpha.4",
         "typescript": "~5.6.2",
@@ -562,7 +563,7 @@
     },
     "packages/opencode": {
       "name": "opencode",
-      "version": "1.18.30",
+      "version": "1.18.31",
       "bin": {
         "opencode": "./bin/opencode",
       },

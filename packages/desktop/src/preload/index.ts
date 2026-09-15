@@ -15,6 +15,11 @@ const api: ElectronAPI = {
     preview: (chooseFile) => ipcRenderer.invoke("chat-import-preview", chooseFile),
     confirm: (token) => ipcRenderer.invoke("chat-import-confirm", token),
   },
+  profileImport: {
+    status: () => ipcRenderer.invoke("profile-import-status"),
+    preview: (browse) => ipcRenderer.invoke("profile-import-preview", browse),
+    confirm: (token) => ipcRenderer.invoke("profile-import-confirm", token),
+  },
   killSidecar: () => ipcRenderer.invoke("kill-sidecar"),
   installCli: () => ipcRenderer.invoke("install-cli"),
   awaitInitialization: () => ipcRenderer.invoke("await-initialization"),

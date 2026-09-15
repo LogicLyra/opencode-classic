@@ -246,6 +246,7 @@ const createPlatform = (windowState: DesktopWindowState): Platform => {
 
     exportDebugLogs: () => window.api.exportDebugLogs(),
     chatImport: os === "linux" ? window.api.chatImport : undefined,
+    profileImport: os === "linux" ? window.api.profileImport : undefined,
 
     setForceFocus: (enabled) => window.api.setForceFocus(enabled),
 
