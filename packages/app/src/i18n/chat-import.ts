@@ -1,15 +1,6 @@
 // Fork-only English fallback. Kept separate from upstream's fully translated
 // dictionaries until these new phrases receive a localization review.
-export const profileImportNativeEnglish = {
-  "desktop.profileImport.title": "Import full OpenCode setup",
-  "desktop.profileImport.message": "Copy this setup and its existing trust permissions?",
-  "desktop.profileImport.detail":
-    "Saved provider credentials: {{providers}}. Cloud accounts: {{accounts}}. Configured plugins: {{plugins}}. MCP entries: {{mcp}}. Project commands: {{commands}}. Permission records: {{permissions}}. Pending prompts: {{pending}}. Git checkouts: {{git}}.\n\nImport itself does not run these integrations. After activation, account refresh, dependency installation, plugins, MCP connections and project startup commands can run normally. Pending prompts remain queued until resumed. Copied Git hooks, filters and helpers retain their behavior when you use Git. Close OpenCode and trust the entire source setup before continuing. External project folders stay shared at their original paths.",
-  "desktop.profileImport.cancel": "Cancel",
-  "desktop.profileImport.confirm": "Copy trusted setup",
-}
 export const chatImportEnglish = {
-  ...profileImportNativeEnglish,
   "profileImport.mode": "Import mode",
   "profileImport.chats": "Chats only",
   "profileImport.everything": "Everything (full setup)",

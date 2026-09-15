@@ -22,13 +22,3 @@ export function setNativeTranslations(next: DesktopNativeBundle) {
 export function nativeT(key: DesktopNativeKey, params?: Record<string, string | number>) {
   return formatDesktopNativeMessage(bundle.messages[key], params)
 }
-
-// Security confirmation copy must not be supplied by the requesting renderer.
-// These fork-only keys use the compiled English fallback until main-owned,
-// reviewed translations are available.
-export function nativeSecurityT(
-  key: Extract<DesktopNativeKey, `desktop.profileImport.${string}`>,
-  params?: Record<string, string | number>,
-) {
-  return formatDesktopNativeMessage(DESKTOP_NATIVE_ENGLISH[key], params)
-}

@@ -23,8 +23,7 @@ import { databaseFingerprint, inventoryProfile } from "./profile-import-files"
 import { createProfileImportController } from "./profile-import-controller"
 import { beginProfileStage } from "./profile-import-journal"
 import { beginProfileScratch, cleanupProfileScratch } from "./profile-import-scratch"
-import { nativeSecurityT, setNativeTranslations } from "./native-translations"
-import { DESKTOP_NATIVE_ENGLISH } from "@opencode-ai/app/i18n/desktop-native"
+import { profileImportConsentText } from "./profile-import-consent"
 
 async function fixture() {
   const root = mkdtempSync(join(tmpdir(), "classic-profile-"))
@@ -484,22 +483,30 @@ describe("full profile import", () => {
     expect(() => runProfileImport(tmp.input)).toThrow("unsupported")
   })
 
-  test("renderer translation overrides cannot reverse security dialog buttons", () => {
-    try {
-      setNativeTranslations({
-        locale: "en",
-        messages: {
-          ...DESKTOP_NATIVE_ENGLISH,
-          "desktop.profileImport.confirm": "Cancel",
-          "desktop.profileImport.cancel": "Copy",
-          "desktop.profileImport.message": "Misleading",
-        },
-      })
-      expect(nativeSecurityT("desktop.profileImport.confirm")).toBe("Copy trusted setup")
-      expect(nativeSecurityT("desktop.profileImport.cancel")).toBe("Cancel")
-      expect(nativeSecurityT("desktop.profileImport.message")).not.toBe("Misleading")
-    } finally {
-      setNativeTranslations({ locale: "en", messages: { ...DESKTOP_NATIVE_ENGLISH } })
-    }
+  test("consent copy is main-owned and interpolates the preview counts", () => {
+    const text = profileImportConsentText({
+      config: "/c",
+      data: "/d",
+      state: "/s",
+      sessions: 1,
+      providers: 2,
+      accounts: 3,
+      workspaces: 0,
+      files: 0,
+      bytes: 0,
+      plugins: 4,
+      mcp: 5,
+      commands: 6,
+      permissions: 7,
+      pending: 8,
+      git: 9,
+    })
+    expect(text.title).toBe("Import full OpenCode setup")
+    expect(text.cancel).toBe("Cancel")
+    expect(text.confirm).toBe("Copy trusted setup")
+    expect(text.detail).toContain("Saved provider credentials: 2")
+    expect(text.detail).toContain("Git checkouts: 9")
+    expect(text.detail).toContain("Pending prompts remain queued until resumed")
+    expect(text.detail).not.toContain("{{")
   })
 })

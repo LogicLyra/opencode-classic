@@ -2,7 +2,12 @@ import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
 import type { ProfileImportError } from "@opencode-ai/app/profile-import"
 
-export type ProfileRoots = { config: string; data: string; state: string; aliases?: { config: string; data: string; state: string } }
+export type ProfileRoots = {
+  config: string
+  data: string
+  state: string
+  aliases?: { config: string; data: string; state: string }
+}
 
 export class ProfileImportFailure extends Error {
   constructor(readonly code: ProfileImportError) {
@@ -25,7 +30,11 @@ export function profilePaths(userData: string) {
 }
 
 export function profileRoots(root: string): ProfileRoots {
-  return { config: join(root, "config", "opencode"), data: join(root, "data", "opencode"), state: join(root, "state", "opencode") }
+  return {
+    config: join(root, "config", "opencode"),
+    data: join(root, "data", "opencode"),
+    state: join(root, "state", "opencode"),
+  }
 }
 
 export function remapProfilePath(value: string, source: ProfileRoots, target: ProfileRoots): string {
@@ -41,7 +50,8 @@ export function remapProfilePath(value: string, source: ProfileRoots, target: Pr
   if (!isAbsolute(value)) return value
   for (const key of ["config", "data", "state"] as const) {
     if (inside(source[key], value)) return join(target[key], relative(source[key], value))
-    if (source.aliases && inside(source.aliases[key], value)) return join(target[key], relative(source.aliases[key], value))
+    if (source.aliases && inside(source.aliases[key], value))
+      return join(target[key], relative(source.aliases[key], value))
   }
   return value
 }
@@ -56,14 +66,23 @@ export function remapProfileObject(value: unknown, source: ProfileRoots, target:
   }
   if (Array.isArray(value)) return value.map((item) => remapProfileObject(item, source, target, key))
   if (value && typeof value === "object") {
-    return Object.fromEntries(Object.entries(value).map(([name, item]) => [remapProfilePath(name, source, target), remapProfileObject(item, source, target, name)]))
+    return Object.fromEntries(
+      Object.entries(value).map(([name, item]) => [
+        remapProfilePath(name, source, target),
+        remapProfileObject(item, source, target, name),
+      ]),
+    )
   }
   return value
 }
 
 export function assertProfileDestination(database: string, userData: string) {
   const data = profileRoots(profilePaths(userData).live).data
-  if (!isAbsolute(database) || dirname(resolve(database)) !== data || !/^opencode(?:-[\w-]+)?\.db$/.test(relative(data, database))) {
+  if (
+    !isAbsolute(database) ||
+    dirname(resolve(database)) !== data ||
+    !/^opencode(?:-[\w-]+)?\.db$/.test(relative(data, database))
+  ) {
     throw new ProfileImportFailure("unavailable")
   }
 }

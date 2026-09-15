@@ -4,7 +4,8 @@ import { isAbsolute, join } from "node:path"
 import { Worker } from "node:worker_threads"
 import { createProfileImportController, type ProfileWorkerResult } from "./profile-import-controller"
 import { getLocalDatabasePath, getSourceProfileEnv } from "./server"
-import { nativeSecurityT, nativeT } from "./native-translations"
+import { nativeT } from "./native-translations"
+import { profileImportConsentText } from "./profile-import-consent"
 import type { ProfileRoots } from "./profile-import-paths"
 import { beginProfileScratch, cleanupProfileScratch } from "./profile-import-scratch"
 
@@ -14,12 +15,13 @@ export function createDesktopProfileImport() {
       const contents = webContents.fromId(sender)
       const window = contents && BrowserWindow.fromWebContents(contents)
       if (!contents || contents.isDestroyed() || !window || window.isDestroyed()) return false
+      const text = profileImportConsentText(summary)
       const result = await dialog.showMessageBox(window, {
         type: "warning",
-        title: nativeSecurityT("desktop.profileImport.title"),
-        message: nativeSecurityT("desktop.profileImport.message"),
-        detail: nativeSecurityT("desktop.profileImport.detail", { ...summary }),
-        buttons: [nativeSecurityT("desktop.profileImport.cancel"), nativeSecurityT("desktop.profileImport.confirm")],
+        title: text.title,
+        message: text.message,
+        detail: text.detail,
+        buttons: [text.cancel, text.confirm],
         defaultId: 0,
         cancelId: 0,
         noLink: true,
