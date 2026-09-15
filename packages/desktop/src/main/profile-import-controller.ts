@@ -9,8 +9,9 @@ export function createProfileImportController(input: {
   destination: () => { database: string; userData: string } | undefined
   select: (browse: boolean) => Promise<ProfileRoots | null>
   run: (input: ProfileImportInput) => Promise<ProfileWorkerResult>
+  approve: (summary: ProfileImportSummary) => Promise<boolean>
 }) {
-  const tokens = new Map<number, { token: string; expires: number; input: ProfileImportInput }>()
+  const tokens = new Map<number, { token: string; expires: number; input: ProfileImportInput; summary: ProfileImportSummary }>()
   let busy = false
   const operation = async (run: () => Promise<ProfileImportResult>): Promise<ProfileImportResult> => {
     if (busy) return { status: "error", code: "busy" }
@@ -30,7 +31,7 @@ export function createProfileImportController(input: {
         const result = await input.run(request)
         if (result.status === "error") return result
         const token = randomUUID()
-        tokens.set(sender, { token, expires: Date.now() + 600_000, input: { ...request, fingerprint: result.fingerprint } })
+        tokens.set(sender, { token, expires: Date.now() + 600_000, input: { ...request, fingerprint: result.fingerprint }, summary: result.summary })
         return { status: "ready", token, summary: result.summary }
       })
     },
@@ -40,6 +41,7 @@ export function createProfileImportController(input: {
         tokens.delete(sender)
         const dest = input.destination()
         if (!entry || typeof token !== "string" || entry.token !== token || entry.expires < Date.now() || dest?.database !== entry.input.destination || dest.userData !== entry.input.userData) return { status: "error", code: "changed" }
+        if (!await input.approve(entry.summary)) return { status: "cancelled" }
         const result = await input.run(entry.input)
         return result.status === "error" ? result : { status: "staged" }
       })

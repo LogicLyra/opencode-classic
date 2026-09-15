@@ -9,10 +9,18 @@ import type { ProfileRoots } from "./profile-import-paths"
 
 export function createDesktopProfileImport() {
   return createProfileImportController({
+    approve: async (summary) => {
+      const result = await dialog.showMessageBox({
+        type: "warning", title: nativeT("desktop.profileImport.title"), message: nativeT("desktop.profileImport.message"),
+        detail: nativeT("desktop.profileImport.detail", { ...summary }),
+        buttons: [nativeT("desktop.profileImport.cancel"), nativeT("desktop.profileImport.confirm")], defaultId: 0, cancelId: 0, noLink: true,
+      })
+      return result.response === 1
+    },
     destination: () => {
       const database = getLocalDatabasePath()
       const env = getSourceProfileEnv()
-      if (process.platform !== "linux" || !database || env.OPENCODE_CONFIG || env.OPENCODE_CONFIG_CONTENT || env.OPENCODE_AUTH_CONTENT) return
+      if (process.platform !== "linux" || !database || env.OPENCODE_DB || env.OPENCODE_CONFIG || env.OPENCODE_CONFIG_CONTENT || env.OPENCODE_AUTH_CONTENT) return
       return { database, userData: app.getPath("userData") }
     },
     select: async (browse) => {
@@ -24,11 +32,13 @@ export function createDesktopProfileImport() {
         data: join(root(env.XDG_DATA_HOME, ".local/share"), "opencode"),
         state: join(root(env.XDG_STATE_HOME, ".local/state"), "opencode"),
       }
+      source.aliases = { config: source.config, data: source.data, state: source.state }
       for (const key of ["data", "config", "state"] as const) {
         if (browse) {
           const result = await dialog.showOpenDialog({ title: nativeT("desktop.dialog.chooseFolder"), defaultPath: source[key], properties: ["openDirectory"] })
           if (result.canceled || !result.filePaths[0]) return null
           source[key] = result.filePaths[0]
+          source.aliases[key] = source[key]
         }
         if (existsSync(source[key])) source[key] = realpathSync(source[key])
       }

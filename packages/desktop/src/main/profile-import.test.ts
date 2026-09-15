@@ -11,6 +11,7 @@ import { activateProfileImport, recoverProfileImport, runProfileImport } from ".
 import { profilePaths, profileRoots, remapProfilePath } from "./profile-import-paths"
 import { databaseFingerprint, inventoryProfile } from "./profile-import-files"
 import { createProfileImportController } from "./profile-import-controller"
+import { beginProfileStage } from "./profile-import-journal"
 
 async function fixture() {
   const root = mkdtempSync(join(tmpdir(), "classic-profile-"))
@@ -18,7 +19,7 @@ async function fixture() {
   const userData = join(root, "classic")
   const paths = profilePaths(userData)
   const target = profileRoots(paths.live)
-  for (const dir of [...Object.values(source), ...Object.values(target)]) mkdirSync(dir, { recursive: true })
+  for (const dir of [source.config, source.data, source.state, target.config, target.data, target.state]) mkdirSync(dir, { recursive: true })
   const destination = join(target.data, "opencode.db")
   for (const file of [join(source.data, "opencode.db"), destination]) {
     const db = new DatabaseSync(file)
@@ -200,8 +201,68 @@ describe("full profile import", () => {
     mkdirSync(tmp.paths.stage)
     writeFileSync(join(tmp.paths.stage, "partial"), "not ready")
     activateProfileImport(tmp.userData)
+    expect(existsSync(tmp.paths.stage)).toBe(true)
+    expect(readFileSync(join(tmp.paths.stage, "partial"), "utf8")).toBe("not ready")
+    expect(existsSync(tmp.destination)).toBe(true)
+  })
+
+  test("a killed worker's proven building stage is safely removed", async () => {
+    using tmp = await fixture()
+    beginProfileStage(tmp.userData, tmp.destination)
+    writeFileSync(join(tmp.paths.stage, "partial"), "not ready")
+    activateProfileImport(tmp.userData)
     expect(existsSync(tmp.paths.stage)).toBe(false)
     expect(existsSync(tmp.destination)).toBe(true)
+  })
+
+  test("recovery never promotes a substituted backup symlink", async () => {
+    using tmp = await fixture()
+    stage(tmp.input)
+    renameSync(tmp.paths.live, join(tmp.userData, "saved-original"))
+    symlinkSync(join(tmp.userData, "saved-original"), tmp.paths.backup)
+    expect(() => recoverProfileImport(tmp.userData)).toThrow()
+    expect(existsSync(tmp.paths.live)).toBe(false)
+    expect(lstatSync(tmp.paths.backup).isSymbolicLink()).toBe(true)
+  })
+
+  test("read-only import preserves SHM and refuses auxiliary symlinks", async () => {
+    using tmp = await fixture()
+    const file = join(tmp.source.data, "opencode.db")
+    const db = new DatabaseSync(file)
+    db.exec("PRAGMA journal_mode=WAL; UPDATE session SET title='wal'")
+    const shm = readFileSync(`${file}-shm`)
+    stage(tmp.input)
+    expect(readFileSync(`${file}-shm`)).toEqual(shm)
+    db.close()
+    using second = await fixture()
+    symlinkSync(join(second.source.data, "auth.json"), join(second.source.data, "opencode.db-shm"))
+    expect(() => runProfileImport(second.input)).toThrow("unsupported")
+  })
+
+  test("recognizes only the generated plugin scaffold as an empty config", async () => {
+    using tmp = await fixture()
+    writeFileSync(join(tmp.target.config, "package.json"), '{"dependencies":{"@opencode-ai/plugin":"1.18.30"}}')
+    writeFileSync(join(tmp.target.config, "package-lock.json"), "{}")
+    mkdirSync(join(tmp.target.config, "node_modules"))
+    writeFileSync(join(tmp.target.config, "node_modules", "generated"), "cache")
+    expect(runProfileImport(tmp.input).summary.sessions).toBe(1)
+    writeFileSync(join(tmp.target.config, "package.json"), '{"dependencies":{"custom-plugin":"1"}}')
+    expect(() => runProfileImport(tmp.input)).toThrow("nonempty")
+  })
+
+  test("preserves lexical root aliases and remaps permission-map keys and rule patterns", async () => {
+    using tmp = await fixture()
+    tmp.source.aliases = { config: "/old/config", data: "/old/data", state: "/old/state" }
+    const db = new DatabaseSync(join(tmp.source.data, "opencode.db"))
+    db.exec(`UPDATE session SET permission='[{"permission":"read","pattern":"/old/data/worktree/**","action":"allow"}]'`)
+    db.close()
+    writeFileSync(join(tmp.source.config, "opencode.jsonc"), '{"permission":{"read":{"/old/data/worktree/**":"allow"}}}')
+    stage(tmp.input)
+    activateProfileImport(tmp.userData)
+    const dest = new DatabaseSync(tmp.destination)
+    expect(dest.prepare("SELECT permission FROM session").get()?.permission).toContain(tmp.target.data)
+    dest.close()
+    expect(readFileSync(join(tmp.target.config, "opencode.jsonc"), "utf8")).toContain(tmp.target.data)
   })
 
   test("remaps root-contained paths only and keeps external project paths", async () => {
@@ -249,12 +310,42 @@ describe("full profile import", () => {
 
   test("controller requires same-window single-use confirmation and pins the destination", async () => {
     using tmp = await fixture()
-    const controller = createProfileImportController({ destination: () => ({ database: tmp.destination, userData: tmp.userData }), select: async () => tmp.source, run: async (input) => ({ status: "complete", ...runProfileImport(input) }) })
+    const controller = createProfileImportController({ destination: () => ({ database: tmp.destination, userData: tmp.userData }), select: async () => tmp.source, approve: async () => true, run: async (input) => ({ status: "complete", ...runProfileImport(input) }) })
     const preview = await controller.preview(1, false)
     if (preview.status !== "ready") throw new Error("fixture preview failed")
     expect(await controller.confirm(2, preview.token)).toEqual({ status: "error", code: "changed" })
     expect(await controller.confirm(1, preview.token)).toEqual({ status: "staged" })
     expect(await controller.confirm(1, preview.token)).toEqual({ status: "error", code: "changed" })
     expect(await controller.preview(1, "/arbitrary/path")).toEqual({ status: "error", code: "unavailable" })
+  })
+
+  test("native confirmation refusal does not stage a setup", async () => {
+    using tmp = await fixture()
+    const controller = createProfileImportController({ destination: () => ({ database: tmp.destination, userData: tmp.userData }), select: async () => tmp.source, approve: async () => false, run: async (input) => ({ status: "complete", ...runProfileImport(input) }) })
+    const preview = await controller.preview(1, false)
+    if (preview.status !== "ready") throw new Error("fixture preview failed")
+    expect(await controller.confirm(1, preview.token)).toEqual({ status: "cancelled" })
+    expect(existsSync(tmp.paths.journal)).toBe(false)
+  })
+
+  test("snapshot object alternates are materialized and work after the original repository is moved", async () => {
+    using tmp = await fixture()
+    const repo = join(tmp.root, "objects-source")
+    const snapshot = join(tmp.source.data, "snapshot", "p", "snapshot")
+    mkdirSync(repo)
+    const git = (args: string[]) => execFileSync("git", ["-c", "core.hooksPath=/dev/null", ...args], { env: { ...process.env, GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1", GIT_AUTHOR_NAME: "Fixture", GIT_AUTHOR_EMAIL: "fixture@example.invalid", GIT_COMMITTER_NAME: "Fixture", GIT_COMMITTER_EMAIL: "fixture@example.invalid" }, stdio: "pipe", encoding: "utf8" })
+    git(["-C", repo, "init"])
+    writeFileSync(join(repo, "file"), "snapshot object\n")
+    git(["-C", repo, "add", "file"])
+    git(["-C", repo, "commit", "-m", "fixture"])
+    const commit = git(["-C", repo, "rev-parse", "HEAD"]).trim()
+    git(["init", "--bare", snapshot])
+    writeFileSync(join(snapshot, "objects", "info", "alternates"), join(repo, ".git", "objects") + "\n")
+    stage(tmp.input)
+    activateProfileImport(tmp.userData)
+    renameSync(repo, `${repo}-moved`)
+    const imported = join(tmp.target.data, "snapshot", "p", "snapshot")
+    expect(readFileSync(join(imported, "objects", "info", "alternates"), "utf8")).not.toContain(repo)
+    expect(git(["--git-dir", imported, "show", `${commit}:file`])).toBe("snapshot object\n")
   })
 })

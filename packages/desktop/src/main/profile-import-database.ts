@@ -1,6 +1,9 @@
 import { DatabaseSync, type SQLInputValue } from "node:sqlite"
-import { chmodSync, existsSync, lstatSync, readdirSync } from "node:fs"
-import { join, relative } from "node:path"
+import { chmodSync, existsSync, lstatSync, readdirSync, realpathSync } from "node:fs"
+import { isAbsolute, join, relative } from "node:path"
+import { Effect } from "effect"
+import schema from "../../../core/src/database/schema.gen"
+import { migrations } from "../../../core/src/database/migration.gen"
 import { quote, validateChatDatabases, validateHistory } from "./chat-import-database"
 import { parseProfileConfig, secureRead } from "./profile-import-files"
 import { ProfileImportFailure, profileRoots, remapProfileObject, remapProfilePath, type ProfileRoots } from "./profile-import-paths"
@@ -21,7 +24,7 @@ export function assertFreshDatabase(db: DatabaseSync) {
   for (const table of profileTables) {
     if (table === "data_migration") continue
     const allowed = table === "account_state" ? " WHERE active_account_id IS NOT NULL OR active_org_id IS NOT NULL" :
-      table === "project" ? " WHERE NOT (id = 'global' AND worktree = '/' AND sandboxes = '[]' AND commands IS NULL AND name IS NULL AND icon_url IS NULL AND icon_url_override IS NULL)" : ""
+      table === "project" ? " WHERE NOT (id = 'global' AND worktree = '/' AND sandboxes = '[]' AND commands IS NULL AND name IS NULL AND icon_url IS NULL AND icon_url_override IS NULL AND icon_color IS NULL AND vcs IS NULL AND time_initialized IS NULL)" : ""
     if (db.prepare(`SELECT 1 FROM ${quote(table)}${allowed} LIMIT 1`).get()) throw new ProfileImportFailure("nonempty")
   }
 }
@@ -33,12 +36,18 @@ export function assertFreshProfile(root: string, database: string) {
   for (const key of ["config", "data", "state"] as const) {
     const dir = roots[key]
     if (!existsSync(dir)) continue
+    if (!lstatSync(dir).isDirectory() || lstatSync(dir).isSymbolicLink() || realpathSync(dir) !== dir) throw new ProfileImportFailure("nonempty")
+    const manifest = join(dir, "package.json")
+    const scaffold = key === "config" && existsSync(manifest) ? parseProfileConfig(secureRead(manifest)) : undefined
+    const dependencies = scaffold?.dependencies
+    const generated = scaffold && Object.keys(scaffold).every((name) => name === "dependencies") && dependencies && typeof dependencies === "object" && !Array.isArray(dependencies) && Object.keys(dependencies).length === 1 && "@opencode-ai/plugin" in dependencies && typeof dependencies["@opencode-ai/plugin"] === "string"
     const walk = (path: string) => {
       const info = lstatSync(path)
       const part = relative(dir, path)
       if (info.isSymbolicLink()) throw new ProfileImportFailure("nonempty")
       if (key === "data" && (part === "log" || path === database || ["-wal", "-shm"].some((suffix) => path === database + suffix))) return
       if (key === "state" && part === "locks") return
+      if (generated && ["package.json", "package-lock.json", "bun.lock", "node_modules"].includes(part)) return
       if (info.isDirectory()) { for (const name of readdirSync(path)) walk(join(path, name)); return }
       if (!info.isFile()) throw new ProfileImportFailure("nonempty")
       if (key === "config" && ["config.json", "opencode.json", "opencode.jsonc"].includes(part)) {
@@ -54,11 +63,20 @@ export function assertFreshProfile(root: string, database: string) {
 }
 
 export function inspectProfileDatabase(source: DatabaseSync, destination: DatabaseSync) {
-  const names = (db: DatabaseSync) => db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name").all().map((row) => row.name)
+  const names = (db: DatabaseSync) => db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name != '__drizzle_migrations' ORDER BY name").all().map((row) => row.name)
   const expected = [...profileTables, "migration"].sort()
   if (JSON.stringify(names(source)) !== JSON.stringify(expected) || JSON.stringify(names(destination)) !== JSON.stringify(expected)) throw new ProfileImportFailure("incompatible")
   validateChatDatabases(source, destination, profileTables)
   assertFreshDatabase(destination)
+  const expectedJournal = migrations.map((migration) => migration.id).sort()
+  const actualJournal = source.prepare("SELECT id FROM migration ORDER BY id").all().map((row) => row.id).filter((id) => id !== "20260530232709_lovely_romulus")
+  if (JSON.stringify(actualJournal) !== JSON.stringify(expectedJournal)) throw new ProfileImportFailure("incompatible")
+  for (const [table, field] of [["project", "worktree"], ["project_directory", "directory"], ["session", "directory"], ["workspace", "directory"]]) {
+    for (const row of source.prepare(`SELECT ${quote(field)} FROM ${quote(table)}`).iterate()) {
+      if (table === "workspace" && row[field] === null) continue
+      if (typeof row[field] !== "string" || !isAbsolute(row[field] as string) || (row[field] as string).includes("\0")) throw new ProfileImportFailure("invalid")
+    }
+  }
   for (const row of source.prepare("SELECT * FROM session").iterate()) validateHistory(source, row)
   if (source.prepare("SELECT 1 FROM session WHERE workspace_id IS NOT NULL AND workspace_id NOT IN (SELECT id FROM workspace) LIMIT 1").get()) throw new ProfileImportFailure("invalid")
 }
@@ -68,14 +86,13 @@ export function copyProfileDatabase(source: DatabaseSync, template: DatabaseSync
   chmodSync(file, 0o600)
   try {
     db.exec("PRAGMA trusted_schema=OFF; PRAGMA foreign_keys=ON; BEGIN IMMEDIATE; PRAGMA defer_foreign_keys=ON")
-    // Only the already-running Classic database supplies DDL. No SQL, triggers,
-    // views, virtual tables or migration scripts from the source are executed.
-    for (const row of template.prepare("SELECT sql FROM sqlite_master WHERE type IN ('table','index') AND sql IS NOT NULL AND name NOT LIKE 'sqlite_%' ORDER BY type DESC").iterate()) {
-      if (typeof row.sql !== "string") throw new ProfileImportFailure("invalid")
-      db.exec(row.sql)
-    }
-    for (const table of [...profileTables, "migration"]) {
-      const from = table === "migration" ? template : source
+    // Compiled schema only: neither database can supply executable DDL.
+    Effect.runSync(schema.up({ run: (sql: string) => Effect.sync(() => db.exec(sql)) } as never))
+    db.exec("CREATE TABLE migration (id TEXT PRIMARY KEY, time_completed INTEGER NOT NULL)")
+    for (const row of template.prepare("SELECT id,time_completed FROM migration").iterate()) db.prepare("INSERT INTO migration VALUES (?,?)").run(row.id, row.time_completed)
+    validateChatDatabases(source, db, profileTables)
+    for (const table of profileTables) {
+      const from = source
       const columns = db.prepare(`PRAGMA table_info(${quote(table)})`).all().map((row) => String(row.name))
       const insert = db.prepare(`INSERT INTO ${quote(table)} (${columns.map(quote).join(",")}) VALUES (${columns.map(() => "?").join(",")})`)
       for (const row of from.prepare(`SELECT * FROM ${quote(table)}`).iterate()) {

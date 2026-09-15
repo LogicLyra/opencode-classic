@@ -6,7 +6,7 @@ import { usePlatform } from "@/context/platform"
 import { ServerConnection, useServer } from "@/context/server"
 import type { ProfileImportResult } from "../profile-import"
 
-export function ProfileImportPanel() {
+export function ProfileImportPanel(props: { onBusy?: (busy: boolean) => void } = {}) {
   const language = useLanguage()
   const platform = usePlatform()
   const server = useServer()
@@ -21,11 +21,12 @@ export function ProfileImportPanel() {
     if (confirm && !token) return
     const key = server.key
     setState("busy", true)
+    props.onBusy?.(true)
     try {
       const result = confirm && token ? await platform.profileImport.confirm(token) : await platform.profileImport.preview(browse)
       if (server.key === key) setState({ result, consent: false })
     } catch { setState("result", { status: "error", code: "invalid" }) }
-    finally { setState("busy", false) }
+    finally { setState("busy", false); props.onBusy?.(false) }
   }
   return <section class="flex flex-col gap-4 min-w-0" aria-busy={state.busy}>
     <p>{language.t("profileImport.description")}</p>
@@ -57,6 +58,12 @@ export function ProfileImportPanel() {
           <dt>{language.t("profileImport.workspaces")}</dt><dd>{result().summary.workspaces}</dd>
           <dt>{language.t("profileImport.files")}</dt><dd>{result().summary.files}</dd>
           <dt>{language.t("profileImport.bytes")}</dt><dd>{result().summary.bytes}</dd>
+          <dt>{language.t("profileImport.plugins")}</dt><dd>{result().summary.plugins}</dd>
+          <dt>{language.t("profileImport.mcp")}</dt><dd>{result().summary.mcp}</dd>
+          <dt>{language.t("profileImport.commands")}</dt><dd>{result().summary.commands}</dd>
+          <dt>{language.t("profileImport.permissions")}</dt><dd>{result().summary.permissions}</dd>
+          <dt>{language.t("profileImport.pending")}</dt><dd>{result().summary.pending}</dd>
+          <dt>{language.t("profileImport.git")}</dt><dd>{result().summary.git}</dd>
         </dl>
         <label class="flex items-start gap-2">
           <input type="checkbox" checked={state.consent} disabled={state.busy} onChange={(event) => setState("consent", event.currentTarget.checked)} />

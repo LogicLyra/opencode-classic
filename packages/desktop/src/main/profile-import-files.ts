@@ -1,10 +1,10 @@
 import { createHash } from "node:crypto"
-import { constants, closeSync, existsSync, fstatSync, fsyncSync, lstatSync, mkdirSync, openSync, readFileSync, readdirSync, readlinkSync, readSync, realpathSync, statfsSync, symlinkSync, writeFileSync, writeSync } from "node:fs"
+import { constants, closeSync, existsSync, fstatSync, fsyncSync, lstatSync, mkdirSync, openSync, readFileSync, readdirSync, readlinkSync, readSync, realpathSync, statfsSync, symlinkSync, writeFileSync, writeSync, type Stats } from "node:fs"
 import { basename, dirname, join, relative, resolve } from "node:path"
 import { applyEdits, parse, parseTree, type Edit, type Node, type ParseError } from "jsonc-parser"
 import { inside, ProfileImportFailure, remapProfilePath, type ProfileRoots } from "./profile-import-paths"
 
-type Entry = { source: string; path: string; kind: "file" | "directory" | "link"; mode: number; size: number; identity: string; hash: string; link?: string }
+type Entry = { source: string; path: string; kind: "file" | "directory" | "link"; mode: number; size: number; identity: string; hash: string; link?: string; replacement?: string }
 export type ProfileInventory = { entries: Entry[]; fingerprint: string; bytes: number }
 
 export function secureRead(file: string) {
@@ -36,19 +36,19 @@ export function digestProfileFile(file: string) {
   } finally { closeSync(fd) }
 }
 
-function identity(info: ReturnType<typeof lstatSync>) {
+function identity(info: Stats) {
   return `${info.dev}:${info.ino}:${info.size}:${info.mtimeMs}:${info.ctimeMs}`
 }
 
 export function inventoryProfile(roots: ProfileRoots): ProfileInventory {
   const entries: Entry[] = []
-  const walk = (source: string, path: string, git = false) => {
+  const walk = (source: string, path: string, git = false, alternates: readonly string[] = []) => {
     if (entries.length >= 500_000) throw new ProfileImportFailure("unsupported")
     const info = lstatSync(source)
     const base = { source, path, mode: info.mode & 0o700, size: info.size, identity: identity(info) }
     if (info.isSymbolicLink()) {
       const target = realpathSync(source)
-      if (!Object.values(roots).some((root) => inside(root, target))) throw new ProfileImportFailure("unsupported")
+      if (![roots.config, roots.data, roots.state].some((root) => inside(root, target))) throw new ProfileImportFailure("unsupported")
       entries.push({ ...base, kind: "link", hash: readlinkSync(source), link: target })
       return
     }
@@ -57,19 +57,33 @@ export function inventoryProfile(roots: ProfileRoots): ProfileInventory {
       for (const name of readdirSync(source).sort()) {
         if (git && ["worktrees", "commondir", "gitdir"].includes(name)) continue
         if (git && name.endsWith(".lock")) throw new ProfileImportFailure("busy")
-        if (git && name === "alternates" && basename(source) === "info" && basename(dirname(source)) === "objects") throw new ProfileImportFailure("unsupported")
-        walk(join(source, name), join(path, name), git)
+        walk(join(source, name), join(path, name), git || name === ".git", alternates)
       }
       return
     }
     if (!info.isFile()) throw new ProfileImportFailure("unsupported")
+    if (basename(source) === "alternates" && basename(dirname(source)) === "info" && basename(dirname(dirname(source))) === "objects") {
+      const objects = dirname(dirname(source))
+      const targets = secureRead(source).trim().split("\n").filter(Boolean).map((line) => {
+        if (line.startsWith('"') || alternates.length >= 8) throw new ProfileImportFailure("unsupported")
+        const root = realpathSync(resolve(objects, line))
+        if (basename(root) !== "objects" || alternates.includes(root) || root === objects || !lstatSync(root).isDirectory()) throw new ProfileImportFailure("unsupported")
+        const id = createHash("sha256").update(root).digest("hex").slice(0, 24)
+        walk(root, join(dirname(dirname(path)), ".profile-alternates", id), true, [...alternates, objects])
+        return `.profile-alternates/${id}`
+      })
+      entries.push({ ...base, kind: "file", hash: digestProfileFile(source), replacement: targets.join("\n") + "\n" })
+      return
+    }
     if (basename(source) === ".git") {
       // A linked checkout must receive private Git objects/index/HEAD. Copying
       // its .git pointer would let Classic modify the original worktree index.
       const pointer = secureRead(source).trim().match(/^gitdir: (.+)$/)
       if (!pointer) throw new ProfileImportFailure("unsupported")
+      if (![join(roots.data, "worktree"), join(roots.data, "repos")].some((root) => inside(root, dirname(source)))) throw new ProfileImportFailure("unsupported")
       const admin = realpathSync(resolve(dirname(source), pointer[1]))
       if (readdirSync(admin).some((name) => name.endsWith(".lock"))) throw new ProfileImportFailure("busy")
+      if (realpathSync(secureRead(join(admin, "gitdir")).trim()) !== source) throw new ProfileImportFailure("unsupported")
       const common = realpathSync(resolve(admin, secureRead(join(admin, "commondir")).trim()))
       if (dirname(admin) !== join(common, "worktrees") || !existsSync(join(common, "objects"))) throw new ProfileImportFailure("unsupported")
       entries.push({ ...base, kind: "file", hash: digestProfileFile(source) })
@@ -85,7 +99,7 @@ export function inventoryProfile(roots: ProfileRoots): ProfileInventory {
     if (!existsSync(roots[key])) continue
     for (const name of readdirSync(roots[key]).sort()) {
       if (key === "data" && (name === "log" || /^opencode(?:-[\w-]+)?\.db(?:-wal|-shm|-journal)?$/.test(name))) continue
-      if (key === "state" && ["locks", "server"].includes(name)) continue
+      if (key === "state" && ["locks", "server", "server.json", "password"].includes(name)) continue
       walk(join(roots[key], name), join(key, "opencode", name))
     }
   }
@@ -95,7 +109,41 @@ export function inventoryProfile(roots: ProfileRoots): ProfileInventory {
 }
 
 export function databaseFingerprint(file: string) {
-  return [file, `${file}-wal`].map((path) => existsSync(path) ? `${identity(lstatSync(path))}:${digestProfileFile(path)}` : "missing").join("|")
+  for (const path of [file, `${file}-wal`, `${file}-shm`, `${file}-journal`]) {
+    const info = lstatSync(path, { throwIfNoEntry: false })
+    if (info && (!info.isFile() || info.isSymbolicLink())) throw new ProfileImportFailure("unsupported")
+    if (path.endsWith("-journal") && info && info.size > 0) throw new ProfileImportFailure("busy")
+  }
+  return [file, `${file}-wal`, `${file}-shm`].map((path) => existsSync(path) ? `${identity(lstatSync(path))}:${digestProfileFile(path)}` : "missing").join("|")
+}
+
+export function copyDatabaseSnapshot(source: string, target: string) {
+  for (const suffix of ["", "-wal"]) {
+    const path = source + suffix
+    if (!existsSync(path)) continue
+    const fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW)
+    const out = openSync(target + suffix, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600)
+    try {
+      const before = fstatSync(fd)
+      if (!before.isFile()) throw new ProfileImportFailure("unsupported")
+      const buffer = Buffer.alloc(1024 * 1024)
+      for (let n = readSync(fd, buffer); n; n = readSync(fd, buffer)) {
+        for (let offset = 0; offset < n;) offset += writeSync(out, buffer, offset, n - offset)
+      }
+      if (identity(before) !== identity(fstatSync(fd))) throw new ProfileImportFailure("changed")
+    } finally { closeSync(fd); closeSync(out) }
+  }
+}
+
+export function profileTreeDigest(root: string) {
+  const hash = createHash("sha256")
+  const walk = (path: string) => {
+    const info = lstatSync(path)
+    hash.update(JSON.stringify([relative(root, path), info.mode & 0o777, info.isSymbolicLink() ? readlinkSync(path) : info.isFile() ? digestProfileFile(path) : "directory"]))
+    if (info.isDirectory()) for (const name of readdirSync(path).sort()) walk(join(path, name))
+  }
+  walk(root)
+  return hash.digest("hex")
 }
 
 export function syncDirectory(dir: string) {
@@ -129,9 +177,10 @@ export function copyProfileFiles(inventory: ProfileInventory, source: ProfileRoo
       const buffer = Buffer.alloc(1024 * 1024)
       for (let n = readSync(fd, buffer); n; n = readSync(fd, buffer)) {
         hash.update(buffer.subarray(0, n))
-        for (let offset = 0; offset < n;) offset += writeSync(out, buffer, offset, n - offset)
+        if (entry.replacement === undefined) for (let offset = 0; offset < n;) offset += writeSync(out, buffer, offset, n - offset)
       }
       if (hash.digest("hex") !== entry.hash || identity(fstatSync(fd)) !== entry.identity) throw new ProfileImportFailure("changed")
+      if (entry.replacement !== undefined) writeFileSync(out, entry.replacement)
       fsyncSync(out)
     } finally { closeSync(fd); closeSync(out) }
   }
@@ -142,8 +191,7 @@ export function remapConfig(text: string, source: ProfileRoots, target: ProfileR
   parseProfileConfig(text)
   const edits: Edit[] = []
   const walk = (node: Node) => {
-    if (node.type === "string" && typeof node.value === "string" &&
-      (node.parent?.type !== "property" || node.parent.children?.[1] === node)) {
+    if (node.type === "string" && typeof node.value === "string") {
       const mapped = remapProfilePath(String(node.value), source, target)
       if (mapped !== node.value) edits.push({ offset: node.offset, length: node.length, content: JSON.stringify(mapped) })
     }

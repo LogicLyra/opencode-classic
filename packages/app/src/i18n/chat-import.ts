@@ -1,6 +1,14 @@
 // Fork-only English fallback. Kept separate from upstream's fully translated
 // dictionaries until these new phrases receive a localization review.
+export const profileImportNativeEnglish = {
+  "desktop.profileImport.title": "Import full OpenCode setup",
+  "desktop.profileImport.message": "Copy this setup and its existing trust permissions?",
+  "desktop.profileImport.detail": "Saved provider credentials: {{providers}}. Cloud accounts: {{accounts}}. Configured plugins: {{plugins}}. MCP entries: {{mcp}}. Project commands: {{commands}}. Permission records: {{permissions}}. Pending prompts: {{pending}}. Git checkouts: {{git}}.\n\nImport itself does not run these integrations. After activation, account refresh, dependency installation, plugins, MCP connections and project startup commands can run normally. Pending prompts remain queued until resumed. Copied Git hooks, filters and helpers retain their behavior when you use Git. Close OpenCode and trust the entire source setup before continuing. External project folders stay shared at their original paths.",
+  "desktop.profileImport.cancel": "Cancel",
+  "desktop.profileImport.confirm": "Copy trusted setup",
+}
 export const chatImportEnglish = {
+  ...profileImportNativeEnglish,
   "profileImport.mode": "Import mode",
   "profileImport.chats": "Chats only",
   "profileImport.everything": "Everything (full setup)",
@@ -20,7 +28,13 @@ export const chatImportEnglish = {
   "profileImport.workspaces": "Workspaces",
   "profileImport.files": "Files and links",
   "profileImport.bytes": "Copy size (bytes)",
-  "profileImport.consent": "I have closed OpenCode and trust this setup. Copy my credentials and existing permissions. Imported plugins and MCP commands may run when Classic starts or I open a project.",
+  "profileImport.plugins": "Configured plugins",
+  "profileImport.mcp": "MCP entries",
+  "profileImport.commands": "Project commands",
+  "profileImport.permissions": "Permission records",
+  "profileImport.pending": "Pending prompts",
+  "profileImport.git": "Git checkouts",
+  "profileImport.consent": "I have closed OpenCode and trust this complete setup, including credentials, account refresh, dependencies, plugins, MCP servers, project commands, Git hooks and existing permissions. These can run during normal use after activation. Pending prompts remain queued until resumed.",
   "profileImport.confirm": "Stage full setup",
   "profileImport.restart": "Restart and activate setup",
   "profileImport.error.unavailable": "Full import requires the built-in Linux desktop server and file-based configuration. Environment-provided config or auth overrides must be removed before importing.",
@@ -29,7 +43,7 @@ export const chatImportEnglish = {
   "profileImport.error.invalid": "The setup could not be validated. Check file permissions, database integrity and config syntax. The running Classic profile has not been replaced.",
   "profileImport.error.changed": "The source changed or this preview expired. Close OpenCode and other writers, then preview again.",
   "profileImport.error.busy": "Another import, an active file lock or a pending activation prevents this operation. Close OpenCode and restart Classic before retrying.",
-  "profileImport.error.unsupported": "This setup contains unsupported links, Git object alternates, special files or exceeds the import limit (50 GiB / 500,000 entries). External symlinks must be materialized before import; source files were not changed.",
+  "profileImport.error.unsupported": "This setup contains unsupported links, cyclic Git object alternates, special files or exceeds the import limit (50 GiB / 500,000 entries). External symlinks must be materialized before import; source files were not changed.",
   "profileImport.error.space": "There is not enough free disk space to stage this setup. Free space and preview again.",
   "chatImport.tab": "Chat import",
   "chatImport.title": "Import chats from OpenCode",

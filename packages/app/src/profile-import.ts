@@ -18,6 +18,12 @@ export type ProfileImportSummary = {
   workspaces: number
   files: number
   bytes: number
+  plugins: number
+  mcp: number
+  commands: number
+  permissions: number
+  pending: number
+  git: number
 }
 
 export type ProfileImportResult =

@@ -2,7 +2,7 @@ import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
 import type { ProfileImportError } from "@opencode-ai/app/profile-import"
 
-export type ProfileRoots = { config: string; data: string; state: string }
+export type ProfileRoots = { config: string; data: string; state: string; aliases?: { config: string; data: string; state: string } }
 
 export class ProfileImportFailure extends Error {
   constructor(readonly code: ProfileImportError) {
@@ -41,6 +41,7 @@ export function remapProfilePath(value: string, source: ProfileRoots, target: Pr
   if (!isAbsolute(value)) return value
   for (const key of ["config", "data", "state"] as const) {
     if (inside(source[key], value)) return join(target[key], relative(source[key], value))
+    if (source.aliases && inside(source.aliases[key], value)) return join(target[key], relative(source.aliases[key], value))
   }
   return value
 }
@@ -49,13 +50,13 @@ export function remapProfilePath(value: string, source: ProfileRoots, target: Pr
 // historical tool output remain byte-for-byte data, even when they mention paths.
 export function remapProfileObject(value: unknown, source: ProfileRoots, target: ProfileRoots, key = ""): unknown {
   if (typeof value === "string") {
-    return /^(directory|worktree|cwd|path|filepath|filePath|filename|root|url|sandboxes|resource)$/.test(key)
+    return /^(directory|worktree|cwd|path|filepath|filePath|filename|root|url|sandboxes|resource|pattern)$/.test(key)
       ? remapProfilePath(value, source, target)
       : value
   }
   if (Array.isArray(value)) return value.map((item) => remapProfileObject(item, source, target, key))
   if (value && typeof value === "object") {
-    return Object.fromEntries(Object.entries(value).map(([name, item]) => [name, remapProfileObject(item, source, target, name)]))
+    return Object.fromEntries(Object.entries(value).map(([name, item]) => [remapProfilePath(name, source, target), remapProfileObject(item, source, target, name)]))
   }
   return value
 }

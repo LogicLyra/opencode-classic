@@ -1,3 +1,5 @@
+import { profileImportNativeEnglish } from "./chat-import"
+
 export const DESKTOP_NATIVE_LOCALES = [
   "en",
   "zh",
@@ -222,6 +224,7 @@ function locale(value: string) {
 }
 
 export const DESKTOP_NATIVE_ENGLISH = {
+  ...profileImportNativeEnglish,
   "desktop.menu.app": "OpenCode",
   "desktop.menu.file": "File",
   "desktop.menu.edit": "Edit",
