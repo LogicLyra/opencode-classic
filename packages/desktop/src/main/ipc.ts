@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process"
-import { stat } from "node:fs/promises"
+import { stat, readFile } from "node:fs/promises"
 import { basename, join } from "node:path"
 import { app, BrowserWindow, clipboard, dialog, shell } from "electron"
 import type { IpcMainEvent, IpcMainInvokeEvent } from "electron"
@@ -26,6 +26,7 @@ import { createDesktopDraftStore } from "./draft-store"
 import { nativeT } from "./native-translations"
 import { handleTrusted, onTrusted } from "./trusted-ipc"
 import { createDesktopChatImport } from "./chat-import"
+import { createDesktopProfileImport } from "./profile-import"
 
 const pickerFilters = (ext?: string[]) => {
   if (!ext || ext.length === 0) return undefined
@@ -58,6 +59,7 @@ type Deps = {
 
 export function registerIpcHandlers(deps: Deps) {
   const chatImport = createDesktopChatImport()
+  const profileImport = createDesktopProfileImport()
   const chatImportWindows = new Set<number>()
   handleTrusted("chat-import-preview", (event, chooseFile: unknown) => {
     const id = event.sender.id
@@ -74,6 +76,23 @@ export function registerIpcHandlers(deps: Deps) {
     })
   })
   handleTrusted("chat-import-confirm", (event, token: unknown) => chatImport.confirm(event.sender.id, token))
+  handleTrusted("profile-import-preview", (event, browse: unknown) => {
+    const id = event.sender.id
+    event.sender.once("destroyed", () => profileImport.clear(id))
+    return profileImport.preview(id, browse).then((result) => {
+      if (event.sender.isDestroyed()) profileImport.clear(id)
+      return result
+    })
+  })
+  handleTrusted("profile-import-confirm", (event, token: unknown) => profileImport.confirm(event.sender.id, token))
+  handleTrusted("profile-import-status", async () => {
+    const text = await readFile(join(app.getPath("userData"), ".profile-import-result.json"), "utf8").catch(() => undefined)
+    if (!text) return
+    const value: unknown = JSON.parse(text)
+    if (value && typeof value === "object" && "status" in value && value.status === "activated") return { status: "activated" }
+    // Persisted results never expose paths, source text or exception details.
+    return { status: "error", code: "invalid" }
+  })
   const drafts = createDesktopDraftStore(join(app.getPath("userData"), "drafts.sqlite"))
   const updaterSubscriptions = createUpdaterSubscriptions()
   app.once("will-quit", updaterSubscriptions.clear)

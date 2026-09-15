@@ -2,6 +2,7 @@ import type { DesktopMenuAction } from "@opencode-ai/app/desktop-menu"
 import type { WslServersPlatform } from "@opencode-ai/app/wsl/types"
 import type { UpdaterState } from "@opencode-ai/app/updater"
 import type { ChatImportPlatform } from "@opencode-ai/app/chat-import"
+import type { ProfileImportPlatform } from "@opencode-ai/app/profile-import"
 import type { DesktopNativeBundle } from "@opencode-ai/app/i18n/desktop-native"
 export type {
   WslDistroProbe,
@@ -45,6 +46,7 @@ export type FatalRendererError = {
 
 export type ElectronAPI = {
   chatImport: ChatImportPlatform
+  profileImport: ProfileImportPlatform
   killSidecar: () => Promise<void>
   installCli: () => Promise<string>
   awaitInitialization: () => Promise<ServerReadyData>

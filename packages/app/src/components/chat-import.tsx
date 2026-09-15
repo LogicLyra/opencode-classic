@@ -9,6 +9,7 @@ import { ServerConnection, useServer } from "@/context/server"
 import { useServerSDK } from "@/context/server-sdk"
 import { useServerSync } from "@/context/server-sync"
 import type { ChatImportResult } from "../chat-import"
+import { ProfileImportPanel } from "./profile-import"
 
 export function ChatImportPanel() {
   const platform = usePlatform()
@@ -17,7 +18,7 @@ export function ChatImportPanel() {
   const sdk = useServerSDK()
   const sync = useServerSync()
   const queries = useQueryClient()
-  const [state, setState] = createStore<{ busy: boolean; result?: ChatImportResult }>({ busy: false })
+  const [state, setState] = createStore<{ busy: boolean; full: boolean; result?: ChatImportResult }>({ busy: false, full: false })
   const local = () => !!platform.chatImport && !!server.current && ServerConnection.builtin(server.current)
   const ready = () => (state.result?.status === "ready" ? state.result : undefined)
   const summary = () => {
@@ -55,6 +56,14 @@ export function ChatImportPanel() {
   return (
     <section class="flex flex-col gap-4 p-6 text-14-regular text-text-base" aria-busy={state.busy}>
       <h2 class="text-16-medium text-text-strong">{language.t("chatImport.title")}</h2>
+      <Show when={platform.profileImport}>
+        <fieldset class="flex flex-wrap gap-4" disabled={state.busy}>
+          <legend class="mb-2">{language.t("profileImport.mode")}</legend>
+          <label class="flex gap-2 items-center"><input type="radio" name="import-mode" checked={!state.full} onChange={() => setState("full", false)} />{language.t("profileImport.chats")}</label>
+          <label class="flex gap-2 items-center"><input type="radio" name="import-mode" checked={state.full} onChange={() => setState("full", true)} />{language.t("profileImport.everything")}</label>
+        </fieldset>
+      </Show>
+      <Show when={!state.full} fallback={<ProfileImportPanel />}>
       <p>{language.t("chatImport.description")}</p>
       <p class="text-text-weak">{language.t("chatImport.scope")}</p>
       <Show when={local()} fallback={<p role="status">{language.t("chatImport.localOnly")}</p>}>
@@ -103,6 +112,7 @@ export function ChatImportPanel() {
             {language.t("chatImport.confirm")}
           </Button>
         </Show>
+      </Show>
       </Show>
     </section>
   )

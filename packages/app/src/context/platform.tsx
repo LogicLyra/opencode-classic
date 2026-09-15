@@ -7,6 +7,7 @@ import type { WslServersPlatform } from "../wsl/types"
 import type { UpdaterPlatform } from "../updater"
 import type { DraftStore } from "@/utils/draft-store"
 import type { ChatImportPlatform } from "../chat-import"
+import type { ProfileImportPlatform } from "../profile-import"
 
 type PickerPaths = string | string[] | null
 type OpenDirectoryPickerOptions = { title?: string; multiple?: boolean }
@@ -78,6 +79,7 @@ type PlatformBase = {
   /** Application-global desktop updater */
   updater?: UpdaterPlatform
   chatImport?: ChatImportPlatform
+  profileImport?: ProfileImportPlatform
 
   /** Fetch override */
   fetch?: typeof fetch

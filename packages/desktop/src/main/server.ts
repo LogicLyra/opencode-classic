@@ -22,6 +22,10 @@ const SIDECAR_START_STALL_TIMEOUT = 60_000
 const SIDECAR_STOP_TIMEOUT = 6_000
 
 let localDatabasePath: string | undefined
+let sourceProfileEnv: NodeJS.ProcessEnv = {}
+export function getSourceProfileEnv() {
+  return sourceProfileEnv
+}
 export function getLocalDatabasePath() {
   return localDatabasePath
 }
@@ -50,6 +54,7 @@ export function setDefaultServerUrl(url: string | null) {
 export function preferAppEnv(userDataPath: string) {
   const shell = process.platform === "win32" ? null : getUserShell()
   const shellEnv = shell ? loadShellEnv(shell, getLogger()) : null
+  sourceProfileEnv = { ...process.env, ...shellEnv }
   Object.assign(process.env, {
     ...shellEnv,
     OPENCODE_EXPERIMENTAL_ICON_DISCOVERY: "true",
@@ -180,8 +185,9 @@ export async function spawnLocalServer(
         child.postMessage({ type: "stop" })
         stopping = Promise.race([
           exit.promise.then(() => undefined),
-          delay(SIDECAR_STOP_TIMEOUT).then(() => {
-            if (!exited) child.kill()
+          delay(SIDECAR_STOP_TIMEOUT).then(async () => {
+             if (!exited) child.kill()
+             await exit.promise
           }),
         ])
         return stopping
