@@ -192,8 +192,14 @@ const main = Effect.gen(function* () {
   }
 
   const shellEnv = preferAppEnv(app.getPath("userData"))
-  if ([".profile-import.json", ".profile-import-stage", ".profile-import-backup"].some((name) => existsSync(join(app.getPath("userData"), name)))) {
-    const { recoverProfileImport } = yield* Effect.promise(() => import("./profile-import-stage"))
+  if (
+    [".profile-import.json", ".profile-import-scratch.json"].some((name) =>
+      existsSync(join(app.getPath("userData"), name)),
+    )
+  ) {
+    const { cleanupProfileScratch } = yield* Effect.promise(() => import("./profile-import-scratch"))
+    cleanupProfileScratch(app.getPath("userData"))
+    const { recoverProfileImport } = yield* Effect.promise(() => import("./profile-import-journal"))
     recoverProfileImport(app.getPath("userData"))
   }
 

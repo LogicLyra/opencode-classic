@@ -1,6 +1,16 @@
 import { describe, expect, test } from "bun:test"
 import { DatabaseSync } from "node:sqlite"
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync, existsSync, lstatSync, renameSync, symlinkSync } from "node:fs"
+import {
+  mkdtempSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+  existsSync,
+  lstatSync,
+  renameSync,
+  symlinkSync,
+} from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { execFileSync } from "node:child_process"
@@ -12,6 +22,9 @@ import { profilePaths, profileRoots, remapProfilePath } from "./profile-import-p
 import { databaseFingerprint, inventoryProfile } from "./profile-import-files"
 import { createProfileImportController } from "./profile-import-controller"
 import { beginProfileStage } from "./profile-import-journal"
+import { beginProfileScratch, cleanupProfileScratch } from "./profile-import-scratch"
+import { nativeSecurityT, setNativeTranslations } from "./native-translations"
+import { DESKTOP_NATIVE_ENGLISH } from "@opencode-ai/app/i18n/desktop-native"
 
 async function fixture() {
   const root = mkdtempSync(join(tmpdir(), "classic-profile-"))
@@ -19,7 +32,8 @@ async function fixture() {
   const userData = join(root, "classic")
   const paths = profilePaths(userData)
   const target = profileRoots(paths.live)
-  for (const dir of [source.config, source.data, source.state, target.config, target.data, target.state]) mkdirSync(dir, { recursive: true })
+  for (const dir of [source.config, source.data, source.state, target.config, target.data, target.state])
+    mkdirSync(dir, { recursive: true })
   const destination = join(target.data, "opencode.db")
   for (const file of [join(source.data, "opencode.db"), destination]) {
     const db = new DatabaseSync(file)
@@ -30,12 +44,22 @@ async function fixture() {
   }
   writeFileSync(join(target.config, "opencode.jsonc"), '{"$schema":"https://opencode.ai/config.json"}')
   const db = new DatabaseSync(join(source.data, "opencode.db"))
-  db.exec("INSERT INTO project (id,worktree,time_created,time_updated,sandboxes,commands) VALUES ('p','/external/repo',1,1,'[]','{\"start\":\"must-not-run\"}')")
-  db.exec("INSERT INTO session (id,project_id,slug,directory,title,version,time_created,time_updated,permission,share_url,revert) VALUES ('ses_copy','p','copy','/external/repo','Keep me','1.18.30',1,2,'[]','https://example.invalid/share','{}')")
-  db.exec("INSERT INTO account VALUES ('acc','test@example.invalid','https://example.invalid','ACCESS_SENTINEL','REFRESH_SENTINEL',99,1,1)")
+  db.exec(
+    "INSERT INTO project (id,worktree,time_created,time_updated,sandboxes,commands) VALUES ('p','/external/repo',1,1,'[]','{\"start\":\"must-not-run\"}')",
+  )
+  db.exec(
+    "INSERT INTO session (id,project_id,slug,directory,title,version,time_created,time_updated,permission,share_url,revert) VALUES ('ses_copy','p','copy','/external/repo','Keep me','1.18.30',1,2,'[]','https://example.invalid/share','{}')",
+  )
+  db.exec(
+    "INSERT INTO account VALUES ('acc','test@example.invalid','https://example.invalid','ACCESS_SENTINEL','REFRESH_SENTINEL',99,1,1)",
+  )
   db.exec("INSERT INTO account_state VALUES (1,'acc','org')")
-  db.exec("INSERT INTO control_account VALUES ('test@example.invalid','https://example.invalid','CONTROL_ACCESS','CONTROL_REFRESH',99,1,1,1)")
-  db.exec("INSERT INTO credential (id,label,value,time_created,time_updated) VALUES ('cred','local','{\"key\":\"DB_SECRET_SENTINEL\"}',1,1)")
+  db.exec(
+    "INSERT INTO control_account VALUES ('test@example.invalid','https://example.invalid','CONTROL_ACCESS','CONTROL_REFRESH',99,1,1,1)",
+  )
+  db.exec(
+    "INSERT INTO credential (id,label,value,time_created,time_updated) VALUES ('cred','local','{\"key\":\"DB_SECRET_SENTINEL\"}',1,1)",
+  )
   db.exec("INSERT INTO permission VALUES ('perm','p','read','/external/repo/*',1,1)")
   db.exec("INSERT INTO session_share VALUES ('ses_copy','share','SHARE_SECRET','https://example.invalid/share',1,1)")
   db.exec("INSERT INTO data_migration VALUES ('complete',1)")
@@ -45,11 +69,25 @@ async function fixture() {
   db.exec("INSERT INTO session_context_epoch VALUES ('ses_copy','{}','{}',1)")
   db.close()
   writeFileSync(join(source.data, "auth.json"), '{"test":{"type":"api","key":"API_SECRET_SENTINEL"}}', { mode: 0o644 })
-  writeFileSync(join(source.config, "opencode.jsonc"), '{\n// retain comments\n"model":"test/model",\n"mcp":{"local":{"type":"local","command":["must-not-run"]}},\n}')
+  writeFileSync(
+    join(source.config, "opencode.jsonc"),
+    '{\n// retain comments\n"model":"test/model",\n"mcp":{"local":{"type":"local","command":["must-not-run"]}},\n}',
+  )
   writeFileSync(join(source.state, "model.json"), '{"recent":["test/model"]}')
   mkdirSync(join(source.config, "agents"))
   writeFileSync(join(source.config, "agents", "custom.md"), "---\ndescription: custom\n---\nKeep agent content")
-  return { root, source, target, userData, paths, destination, input: { source, destination, userData }, [Symbol.dispose]() { rmSync(root, { recursive: true, force: true }) } }
+  return {
+    root,
+    source,
+    target,
+    userData,
+    paths,
+    destination,
+    input: { source, destination, userData },
+    [Symbol.dispose]() {
+      rmSync(root, { recursive: true, force: true })
+    },
+  }
 }
 
 function stage(input: Parameters<typeof runProfileImport>[0]) {
@@ -74,7 +112,10 @@ describe("full profile import", () => {
     expect(databaseFingerprint(join(tmp.source.data, "opencode.db"))).toBe(database)
     activateProfileImport(tmp.userData)
     const db = new DatabaseSync(tmp.destination)
-    expect(db.prepare("SELECT title,share_url FROM session").get()).toEqual({ title: "Keep me", share_url: "https://example.invalid/share" })
+    expect(db.prepare("SELECT title,share_url FROM session").get()).toEqual({
+      title: "Keep me",
+      share_url: "https://example.invalid/share",
+    })
     expect(db.prepare("SELECT access_token FROM account").get()?.access_token).toBe("ACCESS_SENTINEL")
     expect(db.prepare("SELECT value FROM credential").get()?.value).toContain("DB_SECRET_SENTINEL")
     expect(db.prepare("SELECT commands FROM project").get()?.commands).toContain("must-not-run")
@@ -102,7 +143,9 @@ describe("full profile import", () => {
     expect(() => runProfileImport(tmp.input)).toThrow("nonempty")
     rmSync(join(tmp.target.data, "auth.json"))
     const db = new DatabaseSync(tmp.destination)
-    db.exec("INSERT INTO project (id,worktree,time_created,time_updated,sandboxes) VALUES ('existing','/keep',1,1,'[]')")
+    db.exec(
+      "INSERT INTO project (id,worktree,time_created,time_updated,sandboxes) VALUES ('existing','/keep',1,1,'[]')",
+    )
     db.close()
     expect(() => runProfileImport(tmp.input)).toThrow("nonempty")
   })
@@ -163,7 +206,9 @@ describe("full profile import", () => {
     symlinkSync("/etc", join(tmp.source.config, "outside"))
     expect(() => runProfileImport(tmp.input)).toThrow("unsupported")
     rmSync(join(tmp.source.config, "outside"))
-    expect(() => runProfileImport({ ...tmp.input, source: { ...tmp.source, config: tmp.source.data } })).toThrow("unsupported")
+    expect(() => runProfileImport({ ...tmp.input, source: { ...tmp.source, config: tmp.source.data } })).toThrow(
+      "unsupported",
+    )
   })
 
   test("crash after first directory rename recovers before any server opens the DB", async () => {
@@ -254,9 +299,14 @@ describe("full profile import", () => {
     using tmp = await fixture()
     tmp.source.aliases = { config: "/old/config", data: "/old/data", state: "/old/state" }
     const db = new DatabaseSync(join(tmp.source.data, "opencode.db"))
-    db.exec(`UPDATE session SET permission='[{"permission":"read","pattern":"/old/data/worktree/**","action":"allow"}]'`)
+    db.exec(
+      `UPDATE session SET permission='[{"permission":"read","pattern":"/old/data/worktree/**","action":"allow"}]'`,
+    )
     db.close()
-    writeFileSync(join(tmp.source.config, "opencode.jsonc"), '{"permission":{"read":{"/old/data/worktree/**":"allow"}}}')
+    writeFileSync(
+      join(tmp.source.config, "opencode.jsonc"),
+      '{"permission":{"read":{"/old/data/worktree/**":"allow"}}}',
+    )
     stage(tmp.input)
     activateProfileImport(tmp.userData)
     const dest = new DatabaseSync(tmp.destination)
@@ -267,8 +317,12 @@ describe("full profile import", () => {
 
   test("remaps root-contained paths only and keeps external project paths", async () => {
     using tmp = await fixture()
-    expect(remapProfilePath(join(tmp.source.data, "worktree", "one"), tmp.source, tmp.target)).toBe(join(tmp.target.data, "worktree", "one"))
-    expect(remapProfilePath(`${tmp.source.data}-other/file`, tmp.source, tmp.target)).toBe(`${tmp.source.data}-other/file`)
+    expect(remapProfilePath(join(tmp.source.data, "worktree", "one"), tmp.source, tmp.target)).toBe(
+      join(tmp.target.data, "worktree", "one"),
+    )
+    expect(remapProfilePath(`${tmp.source.data}-other/file`, tmp.source, tmp.target)).toBe(
+      `${tmp.source.data}-other/file`,
+    )
     expect(remapProfilePath("/external/repo", tmp.source, tmp.target)).toBe("/external/repo")
   })
 
@@ -277,7 +331,20 @@ describe("full profile import", () => {
     const repo = join(tmp.root, "repo")
     const worktree = join(tmp.source.data, "worktree", "p", "one")
     mkdirSync(repo)
-    const git = (cwd: string, ...args: string[]) => execFileSync("git", ["-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null", "-C", cwd, ...args], { env: { ...process.env, GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: "/dev/null", GIT_AUTHOR_NAME: "Fixture", GIT_AUTHOR_EMAIL: "fixture@example.invalid", GIT_COMMITTER_NAME: "Fixture", GIT_COMMITTER_EMAIL: "fixture@example.invalid" }, encoding: "utf8", stdio: "pipe" })
+    const git = (cwd: string, ...args: string[]) =>
+      execFileSync("git", ["-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null", "-C", cwd, ...args], {
+        env: {
+          ...process.env,
+          GIT_CONFIG_NOSYSTEM: "1",
+          GIT_CONFIG_GLOBAL: "/dev/null",
+          GIT_AUTHOR_NAME: "Fixture",
+          GIT_AUTHOR_EMAIL: "fixture@example.invalid",
+          GIT_COMMITTER_NAME: "Fixture",
+          GIT_COMMITTER_EMAIL: "fixture@example.invalid",
+        },
+        encoding: "utf8",
+        stdio: "pipe",
+      })
     git(repo, "init")
     writeFileSync(join(repo, "tracked"), "base\n")
     git(repo, "add", "tracked")
@@ -289,7 +356,9 @@ describe("full profile import", () => {
     writeFileSync(join(worktree, "untracked"), "keep\n")
     const before = git(worktree, "status", "--porcelain")
     const db = new DatabaseSync(join(tmp.source.data, "opencode.db"))
-    db.prepare("INSERT INTO workspace (id,type,directory,project_id,time_used) VALUES ('ws','local',?,'p',1)").run(worktree)
+    db.prepare("INSERT INTO workspace (id,type,directory,project_id,time_used) VALUES ('ws','local',?,'p',1)").run(
+      worktree,
+    )
     db.prepare("UPDATE session SET directory=?, workspace_id='ws'").run(worktree)
     db.close()
     stage(tmp.input)
@@ -310,7 +379,12 @@ describe("full profile import", () => {
 
   test("controller requires same-window single-use confirmation and pins the destination", async () => {
     using tmp = await fixture()
-    const controller = createProfileImportController({ destination: () => ({ database: tmp.destination, userData: tmp.userData }), select: async () => tmp.source, approve: async () => true, run: async (input) => ({ status: "complete", ...runProfileImport(input) }) })
+    const controller = createProfileImportController({
+      destination: () => ({ database: tmp.destination, userData: tmp.userData }),
+      select: async () => tmp.source,
+      approve: async () => true,
+      run: async (input) => ({ status: "complete", ...runProfileImport(input) }),
+    })
     const preview = await controller.preview(1, false)
     if (preview.status !== "ready") throw new Error("fixture preview failed")
     expect(await controller.confirm(2, preview.token)).toEqual({ status: "error", code: "changed" })
@@ -321,7 +395,12 @@ describe("full profile import", () => {
 
   test("native confirmation refusal does not stage a setup", async () => {
     using tmp = await fixture()
-    const controller = createProfileImportController({ destination: () => ({ database: tmp.destination, userData: tmp.userData }), select: async () => tmp.source, approve: async () => false, run: async (input) => ({ status: "complete", ...runProfileImport(input) }) })
+    const controller = createProfileImportController({
+      destination: () => ({ database: tmp.destination, userData: tmp.userData }),
+      select: async () => tmp.source,
+      approve: async () => false,
+      run: async (input) => ({ status: "complete", ...runProfileImport(input) }),
+    })
     const preview = await controller.preview(1, false)
     if (preview.status !== "ready") throw new Error("fixture preview failed")
     expect(await controller.confirm(1, preview.token)).toEqual({ status: "cancelled" })
@@ -333,7 +412,20 @@ describe("full profile import", () => {
     const repo = join(tmp.root, "objects-source")
     const snapshot = join(tmp.source.data, "snapshot", "p", "snapshot")
     mkdirSync(repo)
-    const git = (args: string[]) => execFileSync("git", ["-c", "core.hooksPath=/dev/null", ...args], { env: { ...process.env, GIT_CONFIG_GLOBAL: "/dev/null", GIT_CONFIG_NOSYSTEM: "1", GIT_AUTHOR_NAME: "Fixture", GIT_AUTHOR_EMAIL: "fixture@example.invalid", GIT_COMMITTER_NAME: "Fixture", GIT_COMMITTER_EMAIL: "fixture@example.invalid" }, stdio: "pipe", encoding: "utf8" })
+    const git = (args: string[]) =>
+      execFileSync("git", ["-c", "core.hooksPath=/dev/null", ...args], {
+        env: {
+          ...process.env,
+          GIT_CONFIG_GLOBAL: "/dev/null",
+          GIT_CONFIG_NOSYSTEM: "1",
+          GIT_AUTHOR_NAME: "Fixture",
+          GIT_AUTHOR_EMAIL: "fixture@example.invalid",
+          GIT_COMMITTER_NAME: "Fixture",
+          GIT_COMMITTER_EMAIL: "fixture@example.invalid",
+        },
+        stdio: "pipe",
+        encoding: "utf8",
+      })
     git(["-C", repo, "init"])
     writeFileSync(join(repo, "file"), "snapshot object\n")
     git(["-C", repo, "add", "file"])
@@ -347,5 +439,67 @@ describe("full profile import", () => {
     const imported = join(tmp.target.data, "snapshot", "p", "snapshot")
     expect(readFileSync(join(imported, "objects", "info", "alternates"), "utf8")).not.toContain(repo)
     expect(git(["--git-dir", imported, "show", `${commit}:file`])).toBe("snapshot object\n")
+  })
+
+  test("unknown top-level sidecar data is not discarded", async () => {
+    using tmp = await fixture()
+    writeFileSync(join(tmp.paths.live, "keep-me"), "owner data")
+    expect(() => runProfileImport(tmp.input)).toThrow("nonempty")
+    expect(readFileSync(join(tmp.paths.live, "keep-me"), "utf8")).toBe("owner data")
+  })
+
+  test("activated recovery retains the rollback copy if integrity changed", async () => {
+    using tmp = await fixture()
+    stage(tmp.input)
+    const journal = JSON.parse(readFileSync(tmp.paths.journal, "utf8"))
+    renameSync(tmp.paths.live, tmp.paths.backup)
+    renameSync(tmp.paths.stage, tmp.paths.live)
+    writeFileSync(tmp.paths.journal, JSON.stringify({ ...journal, phase: "activated" }))
+    writeFileSync(join(tmp.target.data, "auth.json"), "corrupted")
+    expect(() => recoverProfileImport(tmp.userData)).toThrow("changed")
+    expect(existsSync(tmp.paths.backup)).toBe(true)
+    expect(existsSync(tmp.paths.journal)).toBe(true)
+  })
+
+  test("main-owned scratch cleanup recovers interrupted copies and leaves unknown directories alone", async () => {
+    using tmp = await fixture()
+    const scratch = beginProfileScratch(tmp.userData)
+    writeFileSync(join(scratch, "opencode.db"), "SECRET_PARTIAL_COPY")
+    const unknown = join(tmp.userData, ".profile-snapshot-unrelated")
+    mkdirSync(unknown)
+    writeFileSync(join(unknown, "keep"), "owner")
+    cleanupProfileScratch(tmp.userData)
+    expect(existsSync(scratch)).toBe(false)
+    expect(existsSync(join(unknown, "keep"))).toBe(true)
+  })
+
+  test("Git object metadata symlinks cannot bypass alternate materialization", async () => {
+    using tmp = await fixture()
+    const objects = join(tmp.source.data, "snapshot", "p", "one", "objects")
+    mkdirSync(objects, { recursive: true })
+    const info = join(tmp.source.data, "linked-info")
+    mkdirSync(info)
+    writeFileSync(join(info, "alternates"), "/external/repo/.git/objects")
+    symlinkSync(info, join(objects, "info"))
+    expect(() => runProfileImport(tmp.input)).toThrow("unsupported")
+  })
+
+  test("renderer translation overrides cannot reverse security dialog buttons", () => {
+    try {
+      setNativeTranslations({
+        locale: "en",
+        messages: {
+          ...DESKTOP_NATIVE_ENGLISH,
+          "desktop.profileImport.confirm": "Cancel",
+          "desktop.profileImport.cancel": "Copy",
+          "desktop.profileImport.message": "Misleading",
+        },
+      })
+      expect(nativeSecurityT("desktop.profileImport.confirm")).toBe("Copy trusted setup")
+      expect(nativeSecurityT("desktop.profileImport.cancel")).toBe("Cancel")
+      expect(nativeSecurityT("desktop.profileImport.message")).not.toBe("Misleading")
+    } finally {
+      setNativeTranslations({ locale: "en", messages: { ...DESKTOP_NATIVE_ENGLISH } })
+    }
   })
 })

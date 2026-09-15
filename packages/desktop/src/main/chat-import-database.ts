@@ -156,7 +156,11 @@ export function quote(value: string) {
   return `"${value.replaceAll('"', '""')}"`
 }
 
-export function validateChatDatabases(source: DatabaseSync, destination: DatabaseSync, names: readonly string[] = tables) {
+export function validateChatDatabases(
+  source: DatabaseSync,
+  destination: DatabaseSync,
+  names: readonly string[] = tables,
+) {
   const journal = (db: DatabaseSync) => {
     if (!db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'migration'").get()) {
       throw new ChatImportFailure("incompatible")

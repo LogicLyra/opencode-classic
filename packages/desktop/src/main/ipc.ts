@@ -81,7 +81,10 @@ export function registerIpcHandlers(deps: Deps) {
     const id = event.sender.id
     if (!profileImportWindows.has(id)) {
       profileImportWindows.add(id)
-      event.sender.once("destroyed", () => { profileImport.clear(id); profileImportWindows.delete(id) })
+      event.sender.once("destroyed", () => {
+        profileImport.clear(id)
+        profileImportWindows.delete(id)
+      })
     }
     return profileImport.preview(id, browse).then((result) => {
       if (event.sender.isDestroyed()) profileImport.clear(id)
@@ -95,11 +98,23 @@ export function registerIpcHandlers(deps: Deps) {
       const value: unknown = JSON.parse(pending)
       if (value && typeof value === "object" && "phase" in value && value.phase === "ready") return { status: "staged" }
     }
-    const text = await readFile(join(app.getPath("userData"), ".profile-import-result.json"), "utf8").catch(() => undefined)
+    const text = await readFile(join(app.getPath("userData"), ".profile-import-result.json"), "utf8").catch(
+      () => undefined,
+    )
     if (!text) return
     const value: unknown = JSON.parse(text)
-    if (value && typeof value === "object" && "status" in value && value.status === "activated") return { status: "activated" }
-    if (value && typeof value === "object" && "code" in value && typeof value.code === "string" && ["unavailable", "incompatible", "invalid", "nonempty", "changed", "busy", "unsupported", "space"].includes(value.code)) return { status: "error", code: value.code }
+    if (value && typeof value === "object" && "status" in value && value.status === "activated")
+      return { status: "activated" }
+    if (
+      value &&
+      typeof value === "object" &&
+      "code" in value &&
+      typeof value.code === "string" &&
+      ["unavailable", "incompatible", "invalid", "nonempty", "changed", "busy", "unsupported", "space"].includes(
+        value.code,
+      )
+    )
+      return { status: "error", code: value.code }
     // Persisted results never expose paths, source text or exception details.
     return { status: "error", code: "invalid" }
   })

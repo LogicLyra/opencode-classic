@@ -45,9 +45,12 @@
 
 ---
 
-### Bringing chats from OpenCode
+### Bringing your setup from OpenCode
 
-OpenCode Classic Desktop uses a separate database for its built-in server.
+OpenCode Classic Desktop uses a separate profile for its built-in server.
+**Settings > Chat import** and the first-launch dialog offer **Chats only**
+and **Everything (full setup)**. The following chat-merge behavior applies to
+**Chats only**:
 On first launch, or under **Settings > Chat import**, choose **Check default
 OpenCode database** or select a `.db` file. Close OpenCode first, review the
 source, destination and counts, then choose **Import eligible chats**.
@@ -74,6 +77,48 @@ source, destination and counts, then choose **Import eligible chats**.
   remains in the transcript, while external files must still exist.
 - Open the original project folder in Classic to see its imported chats.
   This is a one-time copy, not ongoing synchronization between applications.
+
+#### Everything (full setup)
+
+Close OpenCode and stop other writers first. Choose **Preview default setup**,
+or **Choose setup folders** and select the OpenCode **data**, **config**, then
+**state** folders. These normally reside at `~/.local/share/opencode`,
+`~/.config/opencode`, and `~/.local/state/opencode`; XDG overrides are honored.
+Review the counts, acknowledge that you trust the setup, confirm in the native
+dialog, then restart Classic to activate the staged profile.
+
+- Requires an empty Classic built-in Linux profile. Existing chats, providers,
+  custom settings, accounts and registered projects are never overwritten.
+  Generated default config/plugin files are recognized as bootstrap state.
+- Copies all 19 application database tables, provider `auth.json`, cloud accounts,
+  integration credentials, permissions, share metadata, config files (including
+  JSONC), agents, skills, plugins, state, plans, tool output, workspace files and
+  snapshots. Pending prompts stay queued; import does not execute them.
+- External project paths stay unchanged on the same machine. Internal paths,
+  permission patterns and snapshot keys are remapped. Linked worktrees receive
+  private Git metadata, and snapshot object alternates are materialized so the
+  copies do not depend on the original object stores.
+- SQLite reads a private copy of the source DB/WAL. Source DB, WAL and shared-memory
+  files are left unchanged. Staging uses private permissions and a durable
+  ownership journal. Activation occurs before the built-in server starts and
+  recovers interrupted directory renames. The original empty/bootstrap profile
+  is retained under `.profile-import-retained-<operation-id>` in Classic's desktop
+  profile for inspection; it is not automatically deleted.
+- Credentials remain protected local files. Full setup also preserves executable
+  behavior: account refresh, dependency installation, plugins, MCP connections,
+  project commands, Git hooks/helpers and permission grants can take effect during
+  normal use after activation. Only import a setup you trust. OAuth token rotation
+  can require signing in again when both applications are used.
+- Logs, caches and process locks are regenerated. System programs, shell environment
+  variables, upstream desktop window/sidebar preferences and desktop drafts are
+  not copied. External project files are already shared at their original paths.
+  Open the original project folder to access its chats.
+- Requires matching SQLite migration history and schema. Full setup currently
+  reads `opencode.db`; environment-provided database/config/auth overrides must be
+  removed before using it. Legacy JSON-only stores, external symlinks, cyclic or
+  unsupported Git object references, special files, and profiles above 50 GiB or
+  500,000 inventory entries are refused. Additional disk space is required for
+  staging. A changing source invalidates the preview; close its writers and retry.
 
 The standalone Classic CLI still uses OpenCode's default XDG roots unless you
 override them. Its `uninstall` command preserves data, credentials, configuration,
