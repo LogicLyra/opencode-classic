@@ -1,5 +1,10 @@
 import { randomUUID } from "node:crypto"
-import type { ProfileImportError, ProfileImportResult, ProfileImportSummary } from "@opencode-ai/app/profile-import"
+import type {
+  ProfileImportDetail,
+  ProfileImportError,
+  ProfileImportResult,
+  ProfileImportSummary,
+} from "@opencode-ai/app/profile-import"
 import type { ProfileRoots } from "./profile-import-paths"
 import type { ProfileImportInput } from "./profile-import-stage"
 

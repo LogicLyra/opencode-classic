@@ -7,6 +7,14 @@ export type ProfileImportError =
   | "busy"
   | "unsupported"
   | "space"
+  | "source-busy"
+  | "links"
+  | "git-objects"
+  | "special-files"
+  | "limit"
+  | "oversized-file"
+
+export type ProfileImportDetail = { category: string; count?: number; paths?: string[] }
 
 export type ProfileImportSummary = {
   config: string
@@ -18,6 +26,9 @@ export type ProfileImportSummary = {
   workspaces: number
   files: number
   bytes: number
+  live: boolean
+  materialized: number
+  skipped: number
   plugins: number
   mcp: number
   commands: number
@@ -31,7 +42,7 @@ export type ProfileImportResult =
   | { status: "staged" }
   | { status: "activated" }
   | { status: "cancelled" }
-  | { status: "error"; code: ProfileImportError }
+  | { status: "error"; code: ProfileImportError; detail?: ProfileImportDetail }
 
 export type ProfileImportPlatform = {
   status: () => Promise<ProfileImportResult | undefined>

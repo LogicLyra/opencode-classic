@@ -142,13 +142,20 @@ export function recoverProfileImport(userData: string) {
       syncDirectory(userData)
     }
     cancelProfileStage(userData, journal)
-    recordResult(userData, { status: "error", code: error instanceof ProfileImportFailure ? error.code : "invalid" })
+    const failure = error instanceof ProfileImportFailure ? error : undefined
+    recordResult(userData, {
+      status: "error",
+      code: failure?.code ?? "invalid",
+      category: failure?.detail?.category,
+      count: failure?.detail?.count,
+    })
   }
 }
 
-function recordResult(userData: string, result: { status: string; code?: string }) {
+function recordResult(userData: string, result: { status: string; code?: string; category?: string; count?: number }) {
   const file = join(userData, ".profile-import-result.json")
   const temporary = `${file}.${randomUUID()}.tmp`
+  // Persisted diagnostics stay minimal: category and count only, never paths.
   writePrivate(temporary, JSON.stringify(result))
   renameSync(temporary, file)
   syncDirectory(userData)

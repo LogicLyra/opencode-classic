@@ -46,6 +46,23 @@ export const chatImportEnglish = {
     "The source changed or this preview expired. Close OpenCode and other writers, then preview again.",
   "profileImport.error.busy":
     "Another import, an active file lock or a pending activation prevents this operation. Close OpenCode and restart Classic before retrying.",
+  "profileImport.liveWarning":
+    "OpenCode appears to be running right now. Its database changes continuously, so staging may fail. Close OpenCode (all windows) and stop its servers before confirming for a reliable import.",
+  "profileImport.detail.count": "Affected items: {{count}}",
+  "profileImport.materialized": "External links copied in",
+  "profileImport.skipped": "Runtime files skipped",
+  "profileImport.error.source-busy":
+    "The source is being written to continuously (an OpenCode instance is likely running). Close OpenCode and its servers, then preview and confirm again.",
+  "profileImport.error.links":
+    "The setup contains a link that cannot be copied: a symlink cycle, or a link inside Git metadata where copies must stay exact.",
+  "profileImport.error.git-objects":
+    "The setup's Git metadata uses an unsupported layout (alternates entries, worktree pointers or object stores that cannot be privatized safely).",
+  "profileImport.error.special-files":
+    "The setup contains device nodes or other special files that cannot be copied safely.",
+  "profileImport.error.limit":
+    "The setup exceeds the import limit (50 GiB or 500,000 entries). Remove large backup files or narrow the folders, then preview again.",
+  "profileImport.error.oversized-file":
+    "A configuration or metadata file exceeds its read limit (64 MB for configs, 16 MB for Git metadata). Split or shrink it, then preview again.",
   "profileImport.error.unsupported":
     "This setup contains unsupported links, cyclic Git object alternates, special files or exceeds the import limit (50 GiB / 500,000 entries). External symlinks must be materialized before import; source files were not changed.",
   "profileImport.error.space": "There is not enough free disk space to stage this setup. Free space and preview again.",

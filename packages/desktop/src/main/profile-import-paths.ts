@@ -1,6 +1,6 @@
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
-import type { ProfileImportError } from "@opencode-ai/app/profile-import"
+import type { ProfileImportDetail, ProfileImportError } from "@opencode-ai/app/profile-import"
 
 export type ProfileRoots = {
   config: string
@@ -10,7 +10,10 @@ export type ProfileRoots = {
 }
 
 export class ProfileImportFailure extends Error {
-  constructor(readonly code: ProfileImportError) {
+  constructor(
+    readonly code: ProfileImportError,
+    readonly detail?: ProfileImportDetail,
+  ) {
     super(code)
   }
 }

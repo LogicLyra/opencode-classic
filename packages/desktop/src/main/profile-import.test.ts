@@ -20,7 +20,11 @@ import { migrations } from "../../../core/src/database/migration.gen"
 import { activateProfileImport, recoverProfileImport, runProfileImport } from "./profile-import-stage"
 import { profilePaths, profileRoots, remapProfilePath } from "./profile-import-paths"
 import { databaseFingerprint, inventoryProfile } from "./profile-import-files"
+import { createServer } from "node:net"
+import { Worker } from "node:worker_threads"
 import { createProfileImportController } from "./profile-import-controller"
+import { ProfileImportFailure } from "./profile-import-paths"
+import { chatImportEnglish } from "@opencode-ai/app/i18n/chat-import"
 import { beginProfileStage } from "./profile-import-journal"
 import { beginProfileScratch, cleanupProfileScratch } from "./profile-import-scratch"
 import { profileImportConsentText } from "./profile-import-consent"
@@ -200,14 +204,104 @@ describe("full profile import", () => {
     dest.close()
   })
 
-  test("rejects external symlinks and overlapping roots", async () => {
+  test("materializes external symlinks and still rejects overlapping roots", async () => {
     using tmp = await fixture()
-    symlinkSync("/etc", join(tmp.source.config, "outside"))
-    expect(() => runProfileImport(tmp.input)).toThrow("unsupported")
-    rmSync(join(tmp.source.config, "outside"))
+    const external = join(tmp.root, "linked-config")
+    mkdirSync(external)
+    writeFileSync(join(external, "shared.md"), "external content")
+    symlinkSync(join(external, "shared.md"), join(tmp.source.config, "shared.md"))
+    symlinkSync(external, join(tmp.source.config, "linked-dir"))
+    const preview = runProfileImport(tmp.input)
+    expect(preview.summary.materialized).toBeGreaterThanOrEqual(3)
+    stage(tmp.input)
+    activateProfileImport(tmp.userData)
+    expect(readFileSync(join(tmp.target.config, "shared.md"), "utf8")).toBe("external content")
+    expect(readFileSync(join(tmp.target.config, "linked-dir", "shared.md"), "utf8")).toBe("external content")
+    expect(lstatSync(join(tmp.target.config, "shared.md")).isSymbolicLink()).toBe(false)
     expect(() => runProfileImport({ ...tmp.input, source: { ...tmp.source, config: tmp.source.data } })).toThrow(
       "unsupported",
     )
+  })
+
+  test("skips dangling links and runtime sockets instead of refusing", async () => {
+    using tmp = await fixture()
+    symlinkSync(join(tmp.root, "missing-target"), join(tmp.source.config, "broken"))
+    const socketPath = join(tmp.source.state, "runtime.sock")
+    const server = createServer()
+    await new Promise<void>((resolve) => server.listen(socketPath, resolve))
+    try {
+      const preview = runProfileImport(tmp.input)
+      expect(preview.summary.skipped).toBeGreaterThanOrEqual(2)
+      stage(tmp.input)
+      activateProfileImport(tmp.userData)
+      expect(existsSync(join(tmp.target.config, "broken"))).toBe(false)
+      expect(existsSync(join(tmp.target.state, "runtime.sock"))).toBe(false)
+    } finally {
+      server.close()
+    }
+  })
+
+  test("reads configuration files above the metadata limit", async () => {
+    using tmp = await fixture()
+    const padding = "// " + "x".repeat(1024) + "\n"
+    const huge = `{"model":"t/m",\n${padding.repeat(20 * 1024)}}`
+    writeFileSync(join(tmp.source.config, "opencode.json"), huge)
+    const preview = runProfileImport(tmp.input)
+    expect(preview.summary.config).toContain(".config")
+  })
+
+  test("git metadata symlink refusals carry structured detail", async () => {
+    using tmp = await fixture()
+    const objects = join(tmp.source.data, "snapshot", "p", "one", "objects")
+    mkdirSync(objects, { recursive: true })
+    const info = join(tmp.source.data, "linked-info")
+    mkdirSync(info)
+    writeFileSync(join(info, "alternates"), "/external/repo/.git/objects")
+    symlinkSync(info, join(objects, "info"))
+    try {
+      runProfileImport(tmp.input)
+      throw new Error("expected git-objects failure")
+    } catch (error) {
+      expect(error).toBeInstanceOf(ProfileImportFailure)
+      const failure = error as ProfileImportFailure
+      expect(failure.code).toBe("git-objects")
+      expect(failure.detail?.category).toBe("symlink-in-git-metadata")
+      expect(failure.detail?.paths?.length).toBeGreaterThan(0)
+    }
+  })
+
+  test("a continuously written source reports source-busy, and a quiescent retry succeeds", async () => {
+    using tmp = await fixture()
+    const file = join(tmp.source.data, "opencode.db")
+    const db = new DatabaseSync(file)
+    db.exec("PRAGMA journal_mode=WAL; PRAGMA wal_autocheckpoint=0")
+    const writer = new Worker(
+      `
+      const { DatabaseSync } = require("node:sqlite")
+      const db = new DatabaseSync(${JSON.stringify(file)})
+      let n = 0
+      const timer = setInterval(() => db.exec("UPDATE session SET time_updated = " + (++n)), 3)
+      process.on("exit", () => clearInterval(timer))
+    `,
+      { eval: true },
+    )
+    let busy = false
+    let complete = false
+    try {
+      try {
+        runProfileImport(tmp.input)
+        complete = true
+      } catch (error) {
+        busy = error instanceof ProfileImportFailure && error.code === "source-busy"
+      }
+      expect(busy || complete).toBe(true)
+    } finally {
+      await writer.terminate()
+    }
+    db.exec("PRAGMA wal_checkpoint(TRUNCATE)")
+    db.close()
+    const preview = runProfileImport(tmp.input)
+    expect(preview.summary.sessions).toBe(1)
   })
 
   test("crash after first directory rename recovers before any server opens the DB", async () => {
@@ -280,7 +374,7 @@ describe("full profile import", () => {
     db.close()
     using second = await fixture()
     symlinkSync(join(second.source.data, "auth.json"), join(second.source.data, "opencode.db-shm"))
-    expect(() => runProfileImport(second.input)).toThrow("unsupported")
+    expect(() => runProfileImport(second.input)).toThrow("special-files")
   })
 
   test("recognizes only the generated plugin scaffold as an empty config", async () => {
@@ -472,15 +566,25 @@ describe("full profile import", () => {
     expect(existsSync(join(unknown, "keep"))).toBe(true)
   })
 
-  test("Git object metadata symlinks cannot bypass alternate materialization", async () => {
-    using tmp = await fixture()
-    const objects = join(tmp.source.data, "snapshot", "p", "one", "objects")
-    mkdirSync(objects, { recursive: true })
-    const info = join(tmp.source.data, "linked-info")
-    mkdirSync(info)
-    writeFileSync(join(info, "alternates"), "/external/repo/.git/objects")
-    symlinkSync(info, join(objects, "info"))
-    expect(() => runProfileImport(tmp.input)).toThrow("unsupported")
+  test("every importer error code has user copy", () => {
+    const codes = [
+      "unavailable",
+      "incompatible",
+      "invalid",
+      "nonempty",
+      "changed",
+      "busy",
+      "unsupported",
+      "space",
+      "source-busy",
+      "links",
+      "git-objects",
+      "special-files",
+      "limit",
+      "oversized-file",
+    ]
+    for (const code of codes)
+      expect(typeof (chatImportEnglish as Record<string, string>)[`profileImport.error.${code}`]).toBe("string")
   })
 
   test("consent copy is main-owned and interpolates the preview counts", () => {

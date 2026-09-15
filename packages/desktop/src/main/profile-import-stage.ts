@@ -201,11 +201,16 @@ export function runProfileImport(input: ProfileImportInput): { summary: ProfileI
             if (existsSync(old) && !existsSync(next)) renameSync(old, next)
           }
           copyProfileDatabase(source, destination, join(staged.data, basename(input.destination)), input.source, target)
-          if (
-            before !== databaseFingerprint(database) ||
-            inventoryProfile(input.source).fingerprint !== inventory.fingerprint
-          )
-            throw new ProfileImportFailure("changed")
+          if (databaseFingerprint(database) !== before)
+            throw new ProfileImportFailure("source-busy", { category: "database-final" })
+          let stableFiles = false
+          for (let attempt = 0; attempt < 3; attempt++) {
+            if (inventoryProfile(input.source).fingerprint === inventory.fingerprint) {
+              stableFiles = true
+              break
+            }
+          }
+          if (!stableFiles) throw new ProfileImportFailure("source-busy", { category: "files-final" })
           assertFreshProfile(paths.live, input.destination)
           syncProfileTree(paths.stage)
           writeProfileJournal(input.userData, { ...journal, phase: "ready", digest: profileTreeDigest(paths.stage) })

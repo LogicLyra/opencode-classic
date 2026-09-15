@@ -68,7 +68,27 @@ export function ProfileImportPanel(props: { onBusy?: (busy: boolean) => void } =
           <Show when={state.result?.status === "activated"}>{language.t("profileImport.activated")}</Show>
         </div>
         <Show when={state.result?.status === "error" && state.result}>
-          {(error) => <p role="alert">{language.t(`profileImport.error.${error().code}`)}</p>}
+          {(error) => (
+            <div role="alert">
+              <p>{language.t(`profileImport.error.${error().code}`)}</p>
+              <Show when={error().detail}>
+                {(detail) => (
+                  <div class="text-text-weak">
+                    <Show when={detail().count !== undefined}>
+                      <p>{language.t("profileImport.detail.count", { count: detail().count ?? 0 })}</p>
+                    </Show>
+                    <Show when={(detail().paths?.length ?? 0) > 0}>
+                      <ul class="list-disc ml-4 break-all">
+                        {(detail().paths ?? []).slice(0, 3).map((path) => (
+                          <li>{path}</li>
+                        ))}
+                      </ul>
+                    </Show>
+                  </div>
+                )}
+              </Show>
+            </div>
+          )}
         </Show>
         <Show when={ready()}>
           {(result) => (
@@ -104,7 +124,20 @@ export function ProfileImportPanel(props: { onBusy?: (busy: boolean) => void } =
                 <dd>{result().summary.pending}</dd>
                 <dt>{language.t("profileImport.git")}</dt>
                 <dd>{result().summary.git}</dd>
+                <Show when={result().summary.materialized > 0}>
+                  <dt>{language.t("profileImport.materialized")}</dt>
+                  <dd>{result().summary.materialized}</dd>
+                </Show>
+                <Show when={result().summary.skipped > 0}>
+                  <dt>{language.t("profileImport.skipped")}</dt>
+                  <dd>{result().summary.skipped}</dd>
+                </Show>
               </dl>
+              <Show when={result().summary.live}>
+                <p role="status" class="text-text-weak">
+                  {language.t("profileImport.liveWarning")}
+                </p>
+              </Show>
               <label class="flex items-start gap-2">
                 <input
                   type="checkbox"
