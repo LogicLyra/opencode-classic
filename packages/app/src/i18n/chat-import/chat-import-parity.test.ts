@@ -62,8 +62,19 @@ describe("chat import localization", () => {
 })
 
 const repoRoot = path.resolve(import.meta.dir, "../../../../../")
-const FORK_INSTALL_URL = "https://github.com/LogicLyra/opencode-classic/releases/latest/download/install"
-const FORK_BADGE_URL = "https://github.com/LogicLyra/opencode-classic/actions/workflows/release-classic.yml"
+
+function documentUrls(content: string) {
+  const urls: string[] = []
+  for (const match of content.matchAll(/https?:\/\/[^\s"'<>)]+/g)) {
+    try {
+      const url = new URL(match[0].replace(/[.,;:!]+$/, ""))
+      urls.push(`${url.host}${url.pathname}`)
+    } catch {
+      // skip malformed tokens; the counts below only rely on well-formed links
+    }
+  }
+  return urls
+}
 
 describe("translated README fork-link consistency", () => {
   const readmes = readdirSync(repoRoot)
@@ -76,13 +87,13 @@ describe("translated README fork-link consistency", () => {
 
   for (const name of readmes) {
     test(`${name} carries fork sections and links`, () => {
-      const content = readFileSync(path.join(repoRoot, name), "utf8")
+      const urls = documentUrls(readFileSync(path.join(repoRoot, name), "utf8"))
       const problems = {
-        missingForkInstallUrl: !content.includes(FORK_INSTALL_URL),
-        missingForkBadgeUrl: !content.includes(FORK_BADGE_URL),
-        upstreamInstallUrl: content.includes("https://opencode.ai/install"),
-        upstreamNpmBadge: content.includes("img.shields.io/npm/v/opencode-ai"),
-        upstreamBadge: content.includes("anomalyco/opencode/actions/workflows/publish.yml"),
+        missingForkInstallUrl: !urls.includes("github.com/LogicLyra/opencode-classic/releases/latest/download/install"),
+        missingForkBadgeUrl: !urls.includes("github.com/LogicLyra/opencode-classic/actions/workflows/release-classic.yml"),
+        upstreamInstallUrl: urls.some((value) => value === "opencode.ai/install" || value.startsWith("opencode.ai/install/")),
+        upstreamNpmBadge: urls.some((value) => value.startsWith("img.shields.io/npm/v/opencode-ai")),
+        upstreamBadge: urls.some((value) => value.startsWith("github.com/anomalyco/opencode/actions/workflows/publish.yml")),
       }
       const failed = Object.entries(problems)
         .filter(([, failed]) => failed)
