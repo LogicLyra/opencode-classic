@@ -206,6 +206,48 @@ describe("full profile import", () => {
     dest.close()
   })
 
+  test("skips dangling links nested inside materialized directories", async () => {
+    using tmp = await fixture()
+    const external = join(tmp.root, "dotfiles")
+    mkdirSync(join(external, "sub"))
+    writeFileSync(join(external, "sub", "real.txt"), "present")
+    symlinkSync(join(tmp.root, "gone"), join(external, "sub", "stale"))
+    symlinkSync(external, join(tmp.source.config, "dotfiles"))
+    const preview = runProfileImport(tmp.input)
+    expect(preview.summary.skipped).toBeGreaterThanOrEqual(1)
+    stage(tmp.input)
+    activateProfileImport(tmp.userData)
+    expect(readFileSync(join(tmp.target.config, "dotfiles", "sub", "real.txt"), "utf8")).toBe("present")
+    expect(existsSync(join(tmp.target.config, "dotfiles", "sub", "stale"))).toBe(false)
+  })
+
+  test("imports shared directories linked twice without a false cycle", async () => {
+    using tmp = await fixture()
+    const shared = join(tmp.root, "shared")
+    mkdirSync(shared)
+    writeFileSync(join(shared, "data.txt"), "shared content")
+    symlinkSync(shared, join(tmp.source.config, "first"))
+    symlinkSync(shared, join(tmp.source.config, "second"))
+    const preview = runProfileImport(tmp.input)
+    expect(preview.summary.materialized).toBeGreaterThanOrEqual(2)
+    stage(tmp.input)
+    activateProfileImport(tmp.userData)
+    expect(readFileSync(join(tmp.target.config, "first", "data.txt"), "utf8")).toBe("shared content")
+    expect(readFileSync(join(tmp.target.config, "second", "data.txt"), "utf8")).toBe("shared content")
+  })
+
+  test("refuses non-consecutive migration journals", async () => {
+    using tmp = await fixture()
+    const db = new DatabaseSync(join(tmp.source.data, "opencode.db"))
+    const ids = db
+      .prepare("SELECT id FROM migration ORDER BY id")
+      .all()
+      .map((row) => String(row.id))
+    db.prepare("DELETE FROM migration WHERE id = ?").run(ids[Math.floor(ids.length / 2)])
+    db.close()
+    expect(() => runProfileImport(tmp.input)).toThrow("incompatible")
+  })
+
   test("imports older-journal sources and leaves pending migrations to the app", async () => {
     using tmp = await fixture()
     const db = new DatabaseSync(join(tmp.source.data, "opencode.db"))
