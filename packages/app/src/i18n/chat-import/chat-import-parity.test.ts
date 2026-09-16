@@ -28,7 +28,11 @@ describe("chat import localization", () => {
   })
 
   test("every wired locale translates every phrase or lists it as a documented borrowing", async () => {
-    const borrowings: Record<string, string[]> = {}
+    // Borrowings follow each locale's own established dictionary conventions.
+    // fo: the Faroese app dictionary itself keeps "Workspace" untranslated.
+    const borrowings: Record<string, string[]> = {
+      fo: ["profileImport.workspaces"],
+    }
     for (const [locale, load] of Object.entries(chatImportLoaders)) {
       const { dict } = await load()
       const untranslated = englishKeys.filter(
