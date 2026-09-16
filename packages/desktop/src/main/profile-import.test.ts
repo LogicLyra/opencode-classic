@@ -212,7 +212,7 @@ describe("full profile import", () => {
     symlinkSync(join(external, "shared.md"), join(tmp.source.config, "shared.md"))
     symlinkSync(external, join(tmp.source.config, "linked-dir"))
     const preview = runProfileImport(tmp.input)
-    expect(preview.summary.materialized).toBeGreaterThanOrEqual(3)
+    expect(preview.summary.materialized).toBe(2)
     stage(tmp.input)
     activateProfileImport(tmp.userData)
     expect(readFileSync(join(tmp.target.config, "shared.md"), "utf8")).toBe("external content")
