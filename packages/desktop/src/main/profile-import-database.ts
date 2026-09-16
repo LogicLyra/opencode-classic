@@ -139,7 +139,7 @@ export function inspectProfileDatabase(source: DatabaseSync, destination: Databa
         "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name != '__drizzle_migrations' ORDER BY name",
       )
       .all()
-      .map((row) => row.name)
+      .map((row) => String(row.name))
   const expected = [...profileTables, "migration"].sort()
   // The destination is this build's own database: it must match exactly. The
   // source may be older: tables can be missing (the app's migration runner
