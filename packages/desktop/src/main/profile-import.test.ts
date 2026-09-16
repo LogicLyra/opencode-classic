@@ -209,7 +209,7 @@ describe("full profile import", () => {
   test("skips dangling links nested inside materialized directories", async () => {
     using tmp = await fixture()
     const external = join(tmp.root, "dotfiles")
-    mkdirSync(join(external, "sub"))
+    mkdirSync(join(external, "sub"), { recursive: true })
     writeFileSync(join(external, "sub", "real.txt"), "present")
     symlinkSync(join(tmp.root, "gone"), join(external, "sub", "stale"))
     symlinkSync(external, join(tmp.source.config, "dotfiles"))
