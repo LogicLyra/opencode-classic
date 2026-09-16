@@ -111,7 +111,7 @@ export function inventoryProfile(roots: ProfileRoots): ProfileInventory {
     const info = lstatSync(real)
     const base = { source: real, path, mode: info.mode & 0o700, size: info.size, identity: identity(info) }
     if (info.isDirectory()) {
-      entries.push({ ...base, size: 0, kind: "materialized", hash: "" })
+      entries.push({ ...base, size: 0, kind: "directory", hash: "" })
       for (const name of readdirSync(real).sort()) materialize(join(real, name), join(path, name), visited)
       return
     }
@@ -133,8 +133,10 @@ export function inventoryProfile(roots: ProfileRoots): ProfileInventory {
           category: "symlink-in-git-metadata",
           paths: [relative(roots.data, source) || source],
         })
-      const target = realpathSync(source)
-      if (!existsSync(target) || !existsSync(realpathSync(target))) {
+      let target: string
+      try {
+        target = realpathSync(source)
+      } catch {
         skipped++
         entries.push({ ...base, kind: "skipped", hash: "", reason: "dangling" })
         return

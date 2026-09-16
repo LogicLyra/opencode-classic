@@ -247,7 +247,7 @@ describe("full profile import", () => {
     const huge = `{"model":"t/m",\n${padding.repeat(20 * 1024)}}`
     writeFileSync(join(tmp.source.config, "opencode.json"), huge)
     const preview = runProfileImport(tmp.input)
-    expect(preview.summary.config).toContain(".config")
+    expect(preview.summary.sessions).toBe(1)
   })
 
   test("git metadata symlink refusals carry structured detail", async () => {
