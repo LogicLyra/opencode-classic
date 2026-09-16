@@ -1,0 +1,12 @@
+import type { DesktopNativeLocale } from "../desktop-native"
+
+export type ChatImportSource = { dict: Record<string, string> }
+
+// Per-locale overrides for the fork-owned chat-import copy. A locale is
+// listed here only once its file exists; the enforcement test in
+// chat-import-parity.test.ts fails closed until every locale is covered.
+export const chatImportLoaders: Partial<
+  Record<Exclude<DesktopNativeLocale, "en">, () => Promise<ChatImportSource>>
+> = {
+  de: () => import("./de"),
+}
