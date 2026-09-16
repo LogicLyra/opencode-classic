@@ -2,6 +2,8 @@ import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
 import type { ProfileImportDetail, ProfileImportError } from "@opencode-ai/app/profile-import"
 
+export type { ProfileImportDetail }
+
 export type ProfileRoots = {
   config: string
   data: string
