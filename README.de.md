@@ -10,9 +10,12 @@
 <p align="center">Der Open-Source KI-Coding-Agent.</p>
 <p align="center">
   <a href="https://opencode.ai/discord"><img alt="Discord" src="https://img.shields.io/discord/1391832426048651334?style=flat-square&label=discord" /></a>
-  <a href="https://www.npmjs.com/package/opencode-ai"><img alt="npm" src="https://img.shields.io/npm/v/opencode-ai?style=flat-square" /></a>
-  <a href="https://github.com/anomalyco/opencode/actions/workflows/publish.yml"><img alt="Build status" src="https://img.shields.io/github/actions/workflow/status/anomalyco/opencode/publish.yml?style=flat-square&branch=dev" /></a>
+  <a href="https://github.com/LogicLyra/opencode-classic/actions/workflows/release-classic.yml"><img alt="Build status" src="https://img.shields.io/github/actions/workflow/status/LogicLyra/opencode-classic/release-classic.yml?style=flat-square&branch=dev" /></a>
 </p>
+
+> [!IMPORTANT]
+> OpenCode Classic ist ein inoffizieller, auf Linux fokussierter Fork, der dem Upstream folgt, standardmäßig das klassische Desktop-Layout verwendet und das neu gestaltete Layout in den Einstellungen verfügbar hält. Releases und Updater werden unabhängig unter [`LogicLyra/opencode-classic`](https://github.com/LogicLyra/opencode-classic) gepflegt. Die fork-spezifischen Abschnitte und Installationslinks jedes übersetzten READMEs werden mit dem Englischen synchron gehalten; tieferer Inhalt wird vom Upstream geerbt und kann nachhängen.
+
 
 <p align="center">
   <a href="README.md">English</a> |
@@ -43,44 +46,130 @@
 
 ---
 
+### Dein Setup aus OpenCode mitbringen
+
+OpenCode Classic Desktop verwendet ein separates Profil für den eingebauten Server.
+**Einstellungen > Chat-Import** und der Dialog beim ersten Start bieten **Nur Chats**
+und **Alles (vollständiges Setup)** an. Für **Nur Chats** gilt folgendes
+Merge-Verhalten:
+Wähle beim ersten Start oder unter **Einstellungen > Chat-Import** die Option
+**Standard-OpenCode-Datenbank prüfen** oder wähle eine `.db`-Datei. Schließe zuerst
+OpenCode, prüfe Quelle, Ziel und Zahlen und wähle dann **Geeignete Chats importieren**.
+
+- Die Standardquelle ist `$XDG_DATA_HOME/opencode/opencode.db`, normalerweise
+  `~/.local/share/opencode/opencode.db`. Wähle eine Datei für eigene Pfade oder
+  Datenbanken des Entwicklungskanals. Das Ziel ist die Datenbank des aktiven
+  eingebauten Desktop-Servers im `sidecar`-Verzeichnis des Classic-Desktop-Profils.
+  Remote- und experimentelle Hintergrundserver-Verbindungen werden von diesem
+  Importeur nicht unterstützt.
+- Der Importeur unterstützt übereinstimmende SQLite-Schemata und Migrationsverläufe.
+  Er migriert keine Quelldateien und importiert keinen Legacy-JSON-Speicher. Wenn die
+  Kompatibilitätsprüfungen fehlschlagen, verwende kompatible OpenCode- und
+  Classic-Versionen und führe die Vorschau erneut aus.
+- Abgeschlossene lokale Chats behalten ihre IDs, Titel, Zeitstempel, Nachrichten,
+  Teile, die v2-Historie, Todos und die ursprünglichen Projektpfade. Bereits
+  vorhandene Chat-IDs werden als Ganzes übersprungen; ein erneuter Import
+  aktualisiert einen bereits importierten Chat nicht. Die Quelle ist schreibgeschützt,
+  einschließlich ihrer WAL-Historie, und jeder Import wird atomar committet.
+- Chats mit wartenden Prompts, unfertigen Arbeiten oder expliziter
+  Arbeitsbereich-Zuordnung werden ausgeschlossen und gezählt. Der Import startet
+  nie einen Prompt und führt nie einen Befehl aus. Zugangsdaten, Kontostatus,
+  Berechtigungen, Projektbefehle, Share-Eigentümerschaft, externe Anhänge,
+  Git-Snapshots und Desktop-Entwürfe werden nicht kopiert. Melde dich separat an
+  und lass deine Projektordner an ihren ursprünglichen Pfaden. Historische
+  Undo-Snapshots sind nicht verfügbar; eingebettete Anhangsdaten bleiben im
+  Verlauf, externe Dateien müssen weiterhin existieren.
+- Öffne den ursprünglichen Projektordner in Classic, um dessen importierte Chats
+  zu sehen. Dies ist eine einmalige Kopie, keine laufende Synchronisierung
+  zwischen den Anwendungen.
+
+#### Alles (vollständiges Setup)
+
+Schließe zuerst OpenCode und stoppe andere Schreibzugriffe. Wähle **Standard-Setup
+in der Vorschau prüfen** oder **Setup-Ordner auswählen** und wähle die OpenCode-Ordner
+**Daten**, **Konfiguration** und **Status**. Diese liegen normalerweise unter
+`~/.local/share/opencode`, `~/.config/opencode` und `~/.local/state/opencode`;
+XDG-Overrides werden berücksichtigt. Prüfe die Zahlen, bestätige, dass du dem
+Setup vertraust, bestätige im nativen Dialog und starte Classic neu, um das
+vorbereitete Profil zu aktivieren.
+
+- Erfordert ein leeres eingebautes Classic-Linux-Profil. Bestehende Chats, Anbieter,
+  eigene Einstellungen, Konten und registrierte Projekte werden nie überschrieben.
+  Erzeugte Standard-Konfigurations-/Plugin-Dateien werden als Bootstrap-Zustand
+  erkannt.
+- Kopiert alle 19 Datenbanktabellen der Anwendung, Anbieter-`auth.json`,
+  Cloud-Konten, Integrations-Zugangsdaten, Berechtigungen, Share-Metadaten,
+  Konfigurationsdateien (einschließlich JSONC), Agents, Skills, Plugins, State,
+  Pläne, Tool-Ausgaben, Arbeitsbereich-Dateien und Snapshots. Wartende Prompts
+  bleiben in der Warteschlange; der Import führt sie nicht aus.
+- Externe Projektpfade bleiben auf demselben Rechner unverändert. Interne Pfade,
+  Berechtigungsmuster und Snapshot-Schlüssel werden neu zugeordnet. Verlinkte
+  Worktrees erhalten private Git-Metadaten, und Snapshot-Objekt-Alternates werden
+  materialisiert, damit die Kopien nicht von den ursprünglichen Objektspeichern
+  abhängen.
+- SQLite liest eine private Kopie der Quell-DB/des WAL. Quell-DB, WAL und
+  Shared-Memory-Dateien bleiben unverändert. Die Bereitstellung nutzt private
+  Berechtigungen und ein dauerhaftes Eigentümerschafts-Journal. Die Aktivierung
+  erfolgt vor dem Start des eingebauten Servers und stellt unterbrochene
+  Verzeichnis-Umbenennungen wieder her. Das ursprüngliche leere/Bootstrap-Profil
+  wird unter `.profile-import-retained-<operation-id>` im Desktop-Profil von
+  Classic zur Inspektion aufbewahrt; es wird nicht automatisch gelöscht.
+- Zugangsdaten bleiben geschützte lokale Dateien. Das vollständige Setup erhält
+  auch ausführbares Verhalten: Konto-Aktualisierung, Abhängigkeitsinstallation,
+  Plugins, MCP-Verbindungen, Projektbefehle sowie Git-Hooks/Helfer und
+  Berechtigungszusagen können nach der Aktivierung im normalen Betrieb wirksam
+  werden. Importiere nur ein Setup, dem du vertraust. OAuth-Token-Rotation kann
+  eine erneute Anmeldung erfordern, wenn beide Anwendungen genutzt werden.
+- Logs, Caches und Prozess-Sperren werden neu generiert. Systemprogramme,
+  Shell-Umgebungsvariablen, Upstream-Fenstereinstellungen des Desktops und
+  Desktop-Entwürfe werden nicht kopiert. Externe Projektdateien sind bereits an
+  ihren ursprünglichen Pfaden geteilt. Öffne den ursprünglichen Projektordner,
+  um auf dessen Chats zuzugreifen.
+- Erfordert einen übereinstimmenden SQLite-Migrationsverlauf und ein
+  übereinstimmendes Schema. Das vollständige Setup liest derzeit `opencode.db`;
+  über die Umgebung bereitgestellte Datenbank-/Konfigurations-/Auth-Overrides
+  müssen vorher entfernt werden. Reine Legacy-JSON-Speicher, zyklische oder nicht
+  unterstützte Git-Objektverweise, Geräteknoten sowie Profile über 50 GiB oder
+  500.000 Inventareinträge werden mit konkreter Begründung abgelehnt. Externe
+  Symlinks werden durchkopiert (materialisiert); defekte Links, Sockets und Fifos
+  werden übersprungen und in der Zusammenfassung gezählt. Konfigurationsdateien
+  bis 64 MB werden unterstützt. Für die Bereitstellung ist zusätzlicher
+  Speicherplatz erforderlich.
+- Schließe OpenCode vor dem Import. Die Vorschau warnt, wenn eine laufende Instanz
+  erkannt wird, Snapshot-Kopien wiederholen sich automatisch, und eine dauerhaft
+  geschriebene Quelle meldet einen dedizierten Busy-Fehler mit der Aufforderung,
+  sie zu schließen.
+
+Die eigenständige Classic-CLI verwendet weiterhin OpenCodes Standard-XDG-Roots,
+sofern du sie nicht überschreibst. Ihr `uninstall`-Befehl bewahrt Daten,
+Zugangsdaten, Konfiguration, Cache und State standardmäßig, auch mit `--force`.
+Das Löschen dieser gemeinsamen Roots erfordert `--remove-shared-data`;
+`--keep-data` und `--keep-config` überschreiben diese Anfrage für ihre
+jeweiligen Roots. Prüfe Pfade mit `uninstall --dry-run`. Upstreams eigenes
+Deinstallationsprogramm kann weiterhin gemeinsame CLI-Daten löschen. Der Fork
+verweigert das Öffnen von Datenbanken mit unbekannten Migrationen; aktualisiere
+Classic, statt ein Migrations-Journal zu bearbeiten oder zu löschen.
+
 ### Installation
 
 ```bash
-# YOLO
-curl -fsSL https://opencode.ai/install | bash
-
-# Paketmanager
-npm i -g opencode-ai@latest        # oder bun/pnpm/yarn
-scoop install opencode             # Windows
-choco install opencode             # Windows
-brew install anomalyco/tap/opencode # macOS und Linux (empfohlen, immer aktuell)
-brew install opencode              # macOS und Linux (offizielle Brew-Formula, seltener aktualisiert)
-sudo pacman -S opencode            # Arch Linux (Stable)
-paru -S opencode-bin               # Arch Linux (Latest from AUR)
-mise use -g opencode               # jedes Betriebssystem
-nix run nixpkgs#opencode           # oder github:anomalyco/opencode für den neuesten dev-Branch
+curl -fsSL https://github.com/LogicLyra/opencode-classic/releases/latest/download/install | bash
 ```
 
-> [!TIP]
-> Entferne Versionen älter als 0.1.x vor der Installation.
+> [!WARNING]
+> Das npm-Paket `opencode-ai` und die bestehenden Homebrew-, Scoop-, Chocolatey-, AUR- und Nix-Pakete verteilen das Upstream-OpenCode, nicht OpenCode Classic.
 
 ### Desktop-App (BETA)
 
-OpenCode ist auch als Desktop-Anwendung verfügbar. Lade sie direkt von der [Releases-Seite](https://github.com/anomalyco/opencode/releases) oder [opencode.ai/download](https://opencode.ai/download) herunter.
+Die Desktop-Builds von OpenCode Classic unterstützen ausschließlich Linux und sind auf der [Releases-Seite des Forks](https://github.com/LogicLyra/opencode-classic/releases) verfügbar.
 
-| Plattform             | Download                           |
-| --------------------- | ---------------------------------- |
-| macOS (Apple Silicon) | `opencode-desktop-mac-arm64.dmg`   |
-| macOS (Intel)         | `opencode-desktop-mac-x64.dmg`     |
-| Windows               | `opencode-desktop-windows-x64.exe` |
-| Linux                 | `.deb`, `.rpm` oder AppImage       |
+| Plattform | Download                                              |
+| --------- | ----------------------------------------------------- |
+| Linux x64 | `opencode-classic-desktop-linux-*` (`.deb` oder `.rpm`) |
 
-```bash
-# macOS (Homebrew)
-brew install --cask opencode-desktop
-# Windows (Scoop)
-scoop bucket add extras; scoop install extras/opencode-desktop
-```
+AppImage wird bewusst nicht verteilt. Ubuntu 24.04 und neuer kann Electron-AppImages unter der Standard-AppArmor-Richtlinie zwingen, das Chromium-Sandboxing zu deaktivieren; die installierten deb- und RPM-Formate bewahren die von der Distribution erwartete Sandbox-Integration.
+
+Maintainer können die vollständige Build-, Paket-, Installations- und visuelle Release-Prüfung mit dem [Linux-VM-Release-QA-Runbook](docs/linux-vm-qa.md) reproduzieren.
 
 #### Installationsverzeichnis
 
@@ -88,15 +177,14 @@ Das Installationsskript beachtet die folgende Prioritätsreihenfolge für den In
 
 1. `$OPENCODE_INSTALL_DIR` - Benutzerdefiniertes Installationsverzeichnis
 2. `$XDG_BIN_DIR` - XDG Base Directory Specification-konformer Pfad
-3. `$HOME/bin` - Standard-Binärverzeichnis des Users (falls vorhanden oder erstellbar)
+3. `$HOME/bin` - Standard-Binärverzeichnis des Nutzers (falls vorhanden oder erstellbar)
 4. `$HOME/.opencode/bin` - Standard-Fallback
 
 ```bash
 # Beispiele
-OPENCODE_INSTALL_DIR=/usr/local/bin curl -fsSL https://opencode.ai/install | bash
-XDG_BIN_DIR=$HOME/.local/bin curl -fsSL https://opencode.ai/install | bash
+OPENCODE_INSTALL_DIR=/usr/local/bin curl -fsSL https://github.com/LogicLyra/opencode-classic/releases/latest/download/install | bash
+XDG_BIN_DIR=$HOME/.local/bin curl -fsSL https://github.com/LogicLyra/opencode-classic/releases/latest/download/install | bash
 ```
-
 ### Agents
 
 OpenCode enthält zwei eingebaute Agents, zwischen denen du mit der `Tab`-Taste wechseln kannst.
