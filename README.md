@@ -115,10 +115,15 @@ dialog, then restart Classic to activate the staged profile.
   Open the original project folder to access its chats.
 - Requires matching SQLite migration history and schema. Full setup currently
   reads `opencode.db`; environment-provided database/config/auth overrides must be
-  removed before using it. Legacy JSON-only stores, external symlinks, cyclic or
-  unsupported Git object references, special files, and profiles above 50 GiB or
-  500,000 inventory entries are refused. Additional disk space is required for
-  staging. A changing source invalidates the preview; close its writers and retry.
+  removed before using it. Legacy JSON-only stores, cyclic or unsupported Git
+  object references, device nodes, and profiles above 50 GiB or 500,000
+  inventory entries are refused with a specific reason. External symlinks are
+  copied through (materialized); dangling links, sockets and fifos are skipped
+  and counted in the summary. Configuration files up to 64 MB are supported.
+  Additional disk space is required for staging.
+- Close OpenCode before importing. The preview warns when a running instance is
+  detected, snapshot copies retry automatically, and a continuously written
+  source reports a dedicated busy error asking you to close it.
 
 The standalone Classic CLI still uses OpenCode's default XDG roots unless you
 override them. Its `uninstall` command preserves data, credentials, configuration,

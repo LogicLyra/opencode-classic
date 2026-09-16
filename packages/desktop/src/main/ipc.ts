@@ -110,9 +110,22 @@ export function registerIpcHandlers(deps: Deps) {
       typeof value === "object" &&
       "code" in value &&
       typeof value.code === "string" &&
-      ["unavailable", "incompatible", "invalid", "nonempty", "changed", "busy", "unsupported", "space"].includes(
-        value.code,
-      )
+      [
+        "unavailable",
+        "incompatible",
+        "invalid",
+        "nonempty",
+        "changed",
+        "busy",
+        "unsupported",
+        "space",
+        "source-busy",
+        "links",
+        "git-objects",
+        "special-files",
+        "limit",
+        "oversized-file",
+      ].includes(value.code)
     )
       return { status: "error", code: value.code }
     // Persisted results never expose paths, source text or exception details.

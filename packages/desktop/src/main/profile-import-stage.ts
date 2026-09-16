@@ -21,6 +21,7 @@ import {
   copyDatabaseSnapshot,
   copyProfileFiles,
   databaseFingerprint,
+  PROFILE_CONFIG_READ_LIMIT,
   inventoryProfile,
   parseProfileConfig,
   profileTreeDigest,
@@ -40,7 +41,7 @@ import {
 import {
   assertFreshProfile,
   closeProfileDatabase,
-  copyProfileDatabase,
+  stageProfileDatabase,
   inspectProfileDatabase,
   openProfileDatabase,
 } from "./profile-import-database"
@@ -55,6 +56,36 @@ export type ProfileImportInput = {
   destination: string
   fingerprint?: string
   scratch?: string
+}
+
+// Heartbeat markers of a running OpenCode: lock directory contents, the
+// server manifest, or database auxiliaries touched within the last minute.
+function detectLiveSource(source: ProfileRoots) {
+  try {
+    if (existsSync(join(source.state, "server.json"))) return true
+  } catch {}
+  try {
+    if (readdirSync(join(source.state, "locks")).length > 0) return true
+  } catch {}
+  for (const file of [join(source.data, "opencode.db-wal"), join(source.data, "opencode.db-shm")]) {
+    try {
+      if (Date.now() - lstatSync(file).mtimeMs < 60_000) return true
+    } catch {}
+  }
+  return false
+}
+
+// Copying a database that is being written can observe a torn instant; the
+// fingerprint check may fail even when the copy is usable. Retry a bounded
+// number of times before reporting a busy source.
+function copyDatabaseSnapshotStable(database: string, snapshot: string, before: string, attempts = 3) {
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    rmSync(snapshot, { force: true })
+    rmSync(`${snapshot}-wal`, { force: true })
+    copyDatabaseSnapshot(database, snapshot)
+    if (databaseFingerprint(database) === before) return
+  }
+  throw new ProfileImportFailure("source-busy", { category: "database", count: attempts })
 }
 
 export function runProfileImport(input: ProfileImportInput): { summary: ProfileImportSummary; fingerprint: string } {
@@ -82,10 +113,12 @@ export function runProfileImport(input: ProfileImportInput): { summary: ProfileI
   if (input.fingerprint && input.fingerprint !== fingerprint) throw new ProfileImportFailure("changed")
   const configs = ["config.json", "opencode.json", "opencode.jsonc"].flatMap((name) => {
     const path = join(input.source.config, name)
-    return existsSync(path) ? [parseProfileConfig(secureRead(path))] : []
+    return existsSync(path) ? [parseProfileConfig(secureRead(path, PROFILE_CONFIG_READ_LIMIT))] : []
   })
   const authFile = join(input.source.data, "auth.json")
-  const auth: Record<string, unknown> = existsSync(authFile) ? JSON.parse(secureRead(authFile)) : {}
+  const auth: Record<string, unknown> = existsSync(authFile)
+    ? JSON.parse(secureRead(authFile, PROFILE_CONFIG_READ_LIMIT))
+    : {}
   if (!auth || typeof auth !== "object" || Array.isArray(auth)) throw new ProfileImportFailure("invalid")
   const providers = Object.values(auth).filter((value) => {
     if (!value || typeof value !== "object" || !("type" in value)) return false
@@ -106,13 +139,14 @@ export function runProfileImport(input: ProfileImportInput): { summary: ProfileI
     0,
   )
   const space = statfsSync(input.userData)
-  if (databaseBytes + inventory.bytes > 50 * 1024 ** 3) throw new ProfileImportFailure("unsupported")
+  if (databaseBytes + inventory.bytes > 50 * 1024 ** 3)
+    throw new ProfileImportFailure("limit", { category: "bytes", count: databaseBytes + inventory.bytes })
   if (space.bavail * space.bsize < inventory.bytes * 1.1 + databaseBytes * 4 + 256 * 1024 * 1024)
     throw new ProfileImportFailure("space")
   const scratch = input.scratch ?? beginProfileScratch(input.userData)
   try {
     const snapshot = join(scratch, "opencode.db")
-    copyDatabaseSnapshot(database, snapshot)
+    copyDatabaseSnapshotStable(database, snapshot, before)
     if (databaseFingerprint(database) !== before) throw new ProfileImportFailure("changed")
     const source = openProfileDatabase(snapshot)
     try {
@@ -128,8 +162,11 @@ export function runProfileImport(input: ProfileImportInput): { summary: ProfileI
           providers,
           accounts: count("account") + count("control_account"),
           workspaces: count("workspace"),
-          files: inventory.entries.filter((entry) => entry.kind !== "directory").length,
+          files: inventory.entries.filter((entry) => entry.kind === "file" || entry.kind === "materialized").length,
           bytes: inventory.bytes + databaseBytes,
+          live: detectLiveSource(input.source),
+          materialized: inventory.materialized,
+          skipped: inventory.skipped,
           plugins:
             configs.reduce((n, cfg) => n + (Array.isArray(cfg.plugin) ? cfg.plugin.length : 0), 0) +
             inventory.entries.filter((entry) => /^config\/opencode\/plugins?\/[^/]+\.[cm]?[jt]s$/.test(entry.path))
@@ -156,7 +193,8 @@ export function runProfileImport(input: ProfileImportInput): { summary: ProfileI
           copyProfileFiles(inventory, input.source, target, paths.stage)
           for (const name of ["config.json", "opencode.json", "opencode.jsonc"]) {
             const path = join(staged.config, name)
-            if (existsSync(path)) writeFileSync(path, remapConfig(secureRead(path), input.source, target))
+            if (existsSync(path))
+              writeFileSync(path, remapConfig(secureRead(path, PROFILE_CONFIG_READ_LIMIT), input.source, target))
           }
           // The checkout, index and object store are all copied before converting its
           // linked-worktree metadata. Git config edits only these staged files.
@@ -200,12 +238,17 @@ export function runProfileImport(input: ProfileImportInput): { summary: ProfileI
             const next = join(staged.data, "snapshot", row.project_id, hash(mapped))
             if (existsSync(old) && !existsSync(next)) renameSync(old, next)
           }
-          copyProfileDatabase(source, destination, join(staged.data, basename(input.destination)), input.source, target)
-          if (
-            before !== databaseFingerprint(database) ||
-            inventoryProfile(input.source).fingerprint !== inventory.fingerprint
-          )
-            throw new ProfileImportFailure("changed")
+          stageProfileDatabase(snapshot, join(staged.data, basename(input.destination)), input.source, target)
+          if (databaseFingerprint(database) !== before)
+            throw new ProfileImportFailure("source-busy", { category: "database-final" })
+          let stableFiles = false
+          for (let attempt = 0; attempt < 3; attempt++) {
+            if (inventoryProfile(input.source).fingerprint === inventory.fingerprint) {
+              stableFiles = true
+              break
+            }
+          }
+          if (!stableFiles) throw new ProfileImportFailure("source-busy", { category: "files-final" })
           assertFreshProfile(paths.live, input.destination)
           syncProfileTree(paths.stage)
           writeProfileJournal(input.userData, { ...journal, phase: "ready", digest: profileTreeDigest(paths.stage) })

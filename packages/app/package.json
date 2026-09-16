@@ -1,6 +1,6 @@
 {
   "name": "@opencode-ai/app",
-  "version": "1.18.30",
+  "version": "1.18.31",
   "description": "",
   "type": "module",
   "exports": {
@@ -10,6 +10,7 @@
     "./updater": "./src/updater.ts",
     "./chat-import": "./src/chat-import.ts",
     "./profile-import": "./src/profile-import.ts",
+    "./i18n/chat-import": "./src/i18n/chat-import.ts",
     "./wsl/types": "./src/wsl/types.ts",
     "./vite": "./vite.js",
     "./index.css": "./src/index.css"

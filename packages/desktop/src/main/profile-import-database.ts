@@ -1,11 +1,9 @@
 import { DatabaseSync, type SQLInputValue } from "node:sqlite"
 import { chmodSync, existsSync, lstatSync, readdirSync, realpathSync } from "node:fs"
 import { isAbsolute, join, relative } from "node:path"
-import { Effect } from "effect"
-import schema from "../../../core/src/database/schema.gen"
 import { migrations } from "../../../core/src/database/migration.gen"
-import { quote, validateChatDatabases, validateHistory } from "./chat-import-database"
-import { parseProfileConfig, secureRead } from "./profile-import-files"
+import { quote, validateHistory } from "./chat-import-database"
+import { copyDatabaseSnapshot, parseProfileConfig, secureRead } from "./profile-import-files"
 import {
   ProfileImportFailure,
   profileRoots,
@@ -141,36 +139,43 @@ export function inspectProfileDatabase(source: DatabaseSync, destination: Databa
         "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name != '__drizzle_migrations' ORDER BY name",
       )
       .all()
-      .map((row) => row.name)
+      .map((row) => String(row.name))
   const expected = [...profileTables, "migration"].sort()
-  if (
-    JSON.stringify(names(source)) !== JSON.stringify(expected) ||
-    JSON.stringify(names(destination)) !== JSON.stringify(expected)
-  )
-    throw new ProfileImportFailure("incompatible")
-  validateChatDatabases(source, destination, profileTables)
-  assertFreshDatabase(destination)
-  const expectedJournal = migrations.map((migration) => migration.id).sort()
-  const actualJournal = source
+  // Both databases must carry exactly the known table set: downstream summary,
+  // validation and staging code touches every table unconditionally, and the
+  // app migrator only has to evolve columns, not create missing tables.
+  if (JSON.stringify(names(destination)) !== JSON.stringify(expected)) throw new ProfileImportFailure("incompatible")
+  const sourceNames = names(source)
+  if (JSON.stringify(sourceNames) !== JSON.stringify(expected)) throw new ProfileImportFailure("incompatible")
+  // The journal must be a known, ordered prefix of this build's history:
+  // older sources stay pending for the app's migration runner, unknown or
+  // non-consecutive histories are refused.
+  const history = migrations.map((migration) => migration.id).sort()
+  const actual = source
     .prepare("SELECT id FROM migration ORDER BY id")
     .all()
-    .map((row) => row.id)
+    .map((row) => String(row.id))
     .filter((id) => id !== "20260530232709_lovely_romulus")
-  if (JSON.stringify(actualJournal) !== JSON.stringify(expectedJournal)) throw new ProfileImportFailure("incompatible")
+  if (actual.some((id, index) => id !== history[index])) throw new ProfileImportFailure("incompatible")
+  assertFreshDatabase(destination)
   for (const [table, field] of [
     ["project", "worktree"],
     ["project_directory", "directory"],
     ["session", "directory"],
     ["workspace", "directory"],
   ]) {
+    if (!sourceNames.includes(table)) continue
     for (const row of source.prepare(`SELECT ${quote(field)} FROM ${quote(table)}`).iterate()) {
       if (table === "workspace" && row[field] === null) continue
       if (typeof row[field] !== "string" || !isAbsolute(row[field] as string) || (row[field] as string).includes("\0"))
         throw new ProfileImportFailure("invalid")
     }
   }
-  for (const row of source.prepare("SELECT * FROM session").iterate()) validateHistory(source, row)
+  if (sourceNames.includes("session"))
+    for (const row of source.prepare("SELECT * FROM session").iterate()) validateHistory(source, row)
   if (
+    sourceNames.includes("session") &&
+    sourceNames.includes("workspace") &&
     source
       .prepare(
         "SELECT 1 FROM session WHERE workspace_id IS NOT NULL AND workspace_id NOT IN (SELECT id FROM workspace) LIMIT 1",
@@ -180,43 +185,57 @@ export function inspectProfileDatabase(source: DatabaseSync, destination: Databa
     throw new ProfileImportFailure("invalid")
 }
 
-export function copyProfileDatabase(
-  source: DatabaseSync,
-  template: DatabaseSync,
-  file: string,
+export function stageProfileDatabase(
+  snapshotFile: string,
+  stagedFile: string,
   roots: ProfileRoots,
   target: ProfileRoots,
 ) {
-  const db = new DatabaseSync(file, { allowExtension: false })
-  chmodSync(file, 0o600)
+  // The staged database is the verified snapshot itself, carrying the source's
+  // own DDL, rows and migration journal. Older journals stay pending so the
+  // application's real migration runner upgrades the profile on first start,
+  // exactly as it would for any older database it opens.
+  copyDatabaseSnapshot(snapshotFile, stagedFile)
+  const db = new DatabaseSync(stagedFile, { allowExtension: false })
+  chmodSync(stagedFile, 0o600)
   try {
-    db.exec("PRAGMA trusted_schema=OFF; PRAGMA foreign_keys=ON; BEGIN IMMEDIATE; PRAGMA defer_foreign_keys=ON")
-    // Compiled schema only: neither database can supply executable DDL.
-    Effect.runSync(schema.up({ run: (sql: string) => Effect.sync(() => db.exec(sql)) } as never))
-    db.exec("CREATE TABLE migration (id TEXT PRIMARY KEY, time_completed INTEGER NOT NULL)")
-    for (const row of template.prepare("SELECT id,time_completed FROM migration").iterate())
-      db.prepare("INSERT INTO migration VALUES (?,?)").run(row.id, row.time_completed)
-    validateChatDatabases(source, db, profileTables)
+    db.exec("PRAGMA trusted_schema=OFF; BEGIN IMMEDIATE")
+    // Imported executable schema objects are stripped; only data and the
+    // compiled migration path survive into Classic.
+    for (const row of db
+      .prepare("SELECT type, name FROM sqlite_master WHERE type IN ('trigger','view') AND name NOT LIKE 'sqlite_%'")
+      .all()) {
+      db.exec(`DROP ${row.type === "view" ? "VIEW" : "TRIGGER"} ${quote(String(row.name))}`)
+    }
+    const eventColumns = db
+      .prepare("PRAGMA table_info(event_sequence)")
+      .all()
+      .map((row) => String(row.name))
+    if (eventColumns.includes("owner_id"))
+      db.exec("UPDATE event_sequence SET owner_id = NULL WHERE owner_id IS NOT NULL")
     for (const table of profileTables) {
-      const from = source
-      const columns = db
-        .prepare(`PRAGMA table_info(${quote(table)})`)
-        .all()
+      if (!db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name = ?").get(table)) continue
+      const info = db.prepare(`PRAGMA table_info(${quote(table)})`).all()
+      const columns = info.map((row) => String(row.name))
+      const primary = info
+        .filter((row) => row.pk)
+        .sort((a, b) => Number(a.pk) - Number(b.pk))
         .map((row) => String(row.name))
-      const insert = db.prepare(
-        `INSERT INTO ${quote(table)} (${columns.map(quote).join(",")}) VALUES (${columns.map(() => "?").join(",")})`,
-      )
-      for (const row of from.prepare(`SELECT * FROM ${quote(table)}`).iterate()) {
-        const values = columns.map((name): SQLInputValue => {
+      if (primary.length === 0) continue
+      for (const row of db.prepare(`SELECT * FROM ${quote(table)}`).iterate()) {
+        const changes: [string, SQLInputValue][] = []
+        for (const name of columns) {
           const value = row[name]
-          if (table === "event_sequence" && name === "owner_id") return null
           if (
             typeof value !== "string" ||
             ["credential", "account", "control_account", "session_share"].includes(table)
           )
-            return value
-          if (["directory", "worktree", "path", "resource"].includes(name))
-            return remapProfilePath(value, roots, target)
+            continue
+          if (["directory", "worktree", "path", "resource"].includes(name)) {
+            const mapped = remapProfilePath(value, roots, target)
+            if (mapped !== value) changes.push([name, mapped])
+            continue
+          }
           if (
             [
               "data",
@@ -231,16 +250,26 @@ export function copyProfileDatabase(
               "extra",
             ].includes(name)
           ) {
-            const parsed: unknown = JSON.parse(value)
-            const mapped = remapProfileObject(parsed, roots, target, name)
-            return JSON.stringify(mapped) === JSON.stringify(parsed) ? value : JSON.stringify(mapped)
+            try {
+              const parsed: unknown = JSON.parse(value)
+              const mapped = remapProfileObject(parsed, roots, target, name)
+              const text = JSON.stringify(mapped)
+              if (text !== JSON.stringify(parsed)) changes.push([name, text])
+            } catch {
+              throw new ProfileImportFailure("invalid")
+            }
           }
-          return value
-        })
-        insert.run(...values)
+        }
+        if (changes.length === 0) continue
+        const set = changes.map(([name]) => `${quote(name)} = ?`).join(", ")
+        const where = primary.map((name) => `${quote(name)} = ?`).join(" AND ")
+        db.prepare(`UPDATE ${quote(table)} SET ${set} WHERE ${where}`).run(
+          ...changes.map(([, value]) => value),
+          ...primary.map((name) => row[name] as SQLInputValue),
+        )
       }
     }
-    if (db.prepare("PRAGMA foreign_key_check").get() || db.prepare("PRAGMA quick_check").get()?.quick_check !== "ok")
+    if (db.prepare("PRAGMA quick_check").get()?.quick_check !== "ok" || db.prepare("PRAGMA foreign_key_check").get())
       throw new ProfileImportFailure("invalid")
     db.exec("COMMIT")
   } catch (error) {
