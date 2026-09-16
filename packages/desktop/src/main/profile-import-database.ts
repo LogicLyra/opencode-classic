@@ -148,10 +148,8 @@ export function inspectProfileDatabase(source: DatabaseSync, destination: Databa
   const sourceNames = names(source)
   if (sourceNames.some((name) => !expected.includes(name))) throw new ProfileImportFailure("incompatible")
   const known = new Set([...migrations.map((migration) => migration.id), "20260530232709_lovely_romulus"])
-  for (const id of source
-    .prepare("SELECT id FROM migration ORDER BY id")
-    .all()
-    .map((row) => row.id)) {
+  for (const row of source.prepare("SELECT id FROM migration ORDER BY id").all()) {
+    const id = String(row.id)
     if (!known.has(id)) throw new ProfileImportFailure("incompatible")
   }
   assertFreshDatabase(destination)
@@ -211,7 +209,7 @@ export function stageProfileDatabase(
       const columns = info.map((row) => String(row.name))
       const primary = info
         .filter((row) => row.pk)
-        .sort((a, b) => a.pk - b.pk)
+        .sort((a, b) => Number(a.pk) - Number(b.pk))
         .map((row) => String(row.name))
       if (primary.length === 0) continue
       for (const row of db.prepare(`SELECT * FROM ${quote(table)}`).iterate()) {
