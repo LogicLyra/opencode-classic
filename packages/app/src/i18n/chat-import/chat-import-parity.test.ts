@@ -2,7 +2,8 @@ import { describe, expect, test } from "bun:test"
 import { chatImportEnglish } from "../chat-import"
 import { chatImportLoaders } from "./loaders"
 
-const englishKeys = Object.keys(chatImportEnglish)
+const english = chatImportEnglish as Record<string, string>
+const englishKeys = Object.keys(english)
 
 describe("chat import localization", () => {
   test("every wired locale fully covers the English fork copy", async () => {
@@ -10,7 +11,7 @@ describe("chat import localization", () => {
       const { dict } = await load()
       const missing = englishKeys.filter((key) => !Object.hasOwn(dict, key))
       const extra = Object.keys(dict)
-        .filter((key) => !Object.hasOwn(chatImportEnglish, key))
+        .filter((key) => !Object.hasOwn(english, key))
         .sort()
       expect({ locale, missing, extra }).toEqual({ locale, missing: [], extra: [] })
     }
@@ -20,7 +21,7 @@ describe("chat import localization", () => {
     for (const [locale, load] of Object.entries(chatImportLoaders)) {
       const { dict } = await load()
       const mismatched = englishKeys.filter(
-        (key) => Object.hasOwn(dict, key) && placeholders(dict[key]).join() !== placeholders(chatImportEnglish[key]).join(),
+        (key) => Object.hasOwn(dict, key) && placeholders(dict[key]).join() !== placeholders(english[key]).join(),
       )
       expect({ locale, mismatched }).toEqual({ locale, mismatched: [] })
     }
@@ -31,7 +32,7 @@ describe("chat import localization", () => {
     for (const [locale, load] of Object.entries(chatImportLoaders)) {
       const { dict } = await load()
       const untranslated = englishKeys.filter(
-        (key) => dict[key] === chatImportEnglish[key] && !(borrowings[locale] ?? []).includes(key),
+        (key) => dict[key] === english[key] && !(borrowings[locale] ?? []).includes(key),
       )
       expect({ locale, untranslated }).toEqual({ locale, untranslated: [] })
     }
