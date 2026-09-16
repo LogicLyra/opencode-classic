@@ -41,4 +41,13 @@ export const chatImportLoaders: Partial<
   hy: () => import("./hy"),
   ka: () => import("./ka"),
   mn: () => import("./mn"),
+  ar: () => import("./ar"),
+  ur: () => import("./ur"),
+  pa: () => import("./pa"),
+  fa: () => import("./fa"),
+  dv: () => import("./dv"),
+  hi: () => import("./hi"),
+  bn: () => import("./bn"),
+  ne: () => import("./ne"),
+  si: () => import("./si"),
 }
