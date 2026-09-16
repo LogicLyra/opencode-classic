@@ -1,5 +1,8 @@
-// Fork-only English fallback. Kept separate from upstream's fully translated
-// dictionaries until these new phrases receive a localization review.
+// Fork-owned English source for the chat-import and full-setup-import UI
+// copy. Every non-English locale overrides these phrases from a per-locale
+// dictionary in ./chat-import/ (loaded through ./chat-import/loaders.ts and
+// enforced by ./chat-import/chat-import-parity.test.ts); keys missing there
+// fall back to the values in this file.
 export const chatImportEnglish = {
   "profileImport.mode": "Import mode",
   "profileImport.chats": "Chats only",
