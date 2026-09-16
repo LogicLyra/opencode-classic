@@ -95,33 +95,56 @@ export function inventoryProfile(roots: ProfileRoots): ProfileInventory {
   const entries: Entry[] = []
   let materialized = 0
   let skipped = 0
-  const bytesOf = () => entries.reduce((sum, entry) => sum + entry.size, 0)
+  let totalBytes = 0
   const capCheck = () => {
     if (entries.length >= 500_000)
       throw new ProfileImportFailure("limit", { category: "entries", count: entries.length })
-    if (bytesOf() > 50 * 1024 ** 3) throw new ProfileImportFailure("limit", { category: "bytes", count: bytesOf() })
+    if (totalBytes > 50 * 1024 ** 3) throw new ProfileImportFailure("limit", { category: "bytes", count: totalBytes })
   }
   // Materializing an external directory duplicates its content into the staged
-  // profile; a visited set stops symlink cycles from diverging forever.
-  const materialize = (target: string, path: string, visited: Set<string>) => {
+  // profile. The chain tracks only the current recursion's ancestors, so
+  // shared directories linked twice import as duplicated content while
+  // genuine cycles still fail closed; dangling children are skipped.
+  const materialize = (target: string, path: string, chain: Set<string>) => {
     capCheck()
-    const real = realpathSync(target)
-    if (visited.has(real)) throw new ProfileImportFailure("links", { category: "symlink-cycle", paths: [target] })
-    visited.add(real)
-    const info = lstatSync(real)
-    const base = { source: real, path, mode: info.mode & 0o700, size: info.size, identity: identity(info) }
-    if (info.isDirectory()) {
-      entries.push({ ...base, size: 0, kind: "directory", hash: "" })
-      for (const name of readdirSync(real).sort()) materialize(join(real, name), join(path, name), visited)
-      return
-    }
-    if (!info.isFile()) {
+    let real: string
+    try {
+      real = realpathSync(target)
+    } catch {
       skipped++
-      entries.push({ ...base, kind: "skipped", hash: "", reason: info.isSymbolicLink() ? "dangling" : "socket" })
+      entries.push({
+        source: target,
+        path,
+        mode: 0,
+        size: 0,
+        identity: "",
+        kind: "skipped",
+        hash: "",
+        reason: "dangling",
+      })
       return
     }
-    materialized++
-    entries.push({ ...base, kind: "materialized", hash: digestProfileFile(real) })
+    if (chain.has(real)) throw new ProfileImportFailure("links", { category: "symlink-cycle", paths: [target] })
+    chain.add(real)
+    try {
+      const info = lstatSync(real)
+      const base = { source: real, path, mode: info.mode & 0o700, size: info.size, identity: identity(info) }
+      if (info.isDirectory()) {
+        entries.push({ ...base, size: 0, kind: "directory", hash: "" })
+        for (const name of readdirSync(real).sort()) materialize(join(real, name), join(path, name), chain)
+        return
+      }
+      if (!info.isFile()) {
+        skipped++
+        entries.push({ ...base, kind: "skipped", hash: "", reason: "socket" })
+        return
+      }
+      totalBytes += info.size
+      materialized++
+      entries.push({ ...base, kind: "materialized", hash: digestProfileFile(real) })
+    } finally {
+      chain.delete(real)
+    }
   }
   const walk = (source: string, path: string, git = false, alternates: readonly string[] = []) => {
     capCheck()
@@ -265,6 +288,7 @@ export function inventoryProfile(roots: ProfileRoots): ProfileInventory {
       }
       return
     }
+    totalBytes += info.size
     entries.push({ ...base, kind: "file", hash: digestProfileFile(source) })
   }
   for (const key of ["config", "data", "state"] as const) {
@@ -275,11 +299,9 @@ export function inventoryProfile(roots: ProfileRoots): ProfileInventory {
       walk(join(roots[key], name), join(key, "opencode", name))
     }
   }
-  const bytes = bytesOf()
-  if (bytes > 50 * 1024 ** 3) throw new ProfileImportFailure("limit", { category: "bytes", count: bytes })
   return {
     entries,
-    bytes,
+    bytes: totalBytes,
     materialized,
     skipped,
     fingerprint: createHash("sha256").update(JSON.stringify(entries)).digest("hex"),

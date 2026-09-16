@@ -139,7 +139,8 @@ export function runProfileImport(input: ProfileImportInput): { summary: ProfileI
     0,
   )
   const space = statfsSync(input.userData)
-  if (databaseBytes + inventory.bytes > 50 * 1024 ** 3) throw new ProfileImportFailure("unsupported")
+  if (databaseBytes + inventory.bytes > 50 * 1024 ** 3)
+    throw new ProfileImportFailure("limit", { category: "bytes", count: databaseBytes + inventory.bytes })
   if (space.bavail * space.bsize < inventory.bytes * 1.1 + databaseBytes * 4 + 256 * 1024 * 1024)
     throw new ProfileImportFailure("space")
   const scratch = input.scratch ?? beginProfileScratch(input.userData)

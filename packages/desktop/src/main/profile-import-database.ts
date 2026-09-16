@@ -141,17 +141,22 @@ export function inspectProfileDatabase(source: DatabaseSync, destination: Databa
       .all()
       .map((row) => String(row.name))
   const expected = [...profileTables, "migration"].sort()
-  // The destination is this build's own database: it must match exactly. The
-  // source may be older: tables can be missing (the app's migration runner
-  // recreates them on first start), but unknown extra tables are refused.
+  // Both databases must carry exactly the known table set: downstream summary,
+  // validation and staging code touches every table unconditionally, and the
+  // app migrator only has to evolve columns, not create missing tables.
   if (JSON.stringify(names(destination)) !== JSON.stringify(expected)) throw new ProfileImportFailure("incompatible")
   const sourceNames = names(source)
-  if (sourceNames.some((name) => !expected.includes(name))) throw new ProfileImportFailure("incompatible")
-  const known = new Set([...migrations.map((migration) => migration.id), "20260530232709_lovely_romulus"])
-  for (const row of source.prepare("SELECT id FROM migration ORDER BY id").all()) {
-    const id = String(row.id)
-    if (!known.has(id)) throw new ProfileImportFailure("incompatible")
-  }
+  if (JSON.stringify(sourceNames) !== JSON.stringify(expected)) throw new ProfileImportFailure("incompatible")
+  // The journal must be a known, ordered prefix of this build's history:
+  // older sources stay pending for the app's migration runner, unknown or
+  // non-consecutive histories are refused.
+  const history = migrations.map((migration) => migration.id).sort()
+  const actual = source
+    .prepare("SELECT id FROM migration ORDER BY id")
+    .all()
+    .map((row) => String(row.id))
+    .filter((id) => id !== "20260530232709_lovely_romulus")
+  if (actual.some((id, index) => id !== history[index])) throw new ProfileImportFailure("incompatible")
   assertFreshDatabase(destination)
   for (const [table, field] of [
     ["project", "worktree"],
@@ -202,7 +207,12 @@ export function stageProfileDatabase(
       .all()) {
       db.exec(`DROP ${row.type === "view" ? "VIEW" : "TRIGGER"} ${quote(String(row.name))}`)
     }
-    db.exec("UPDATE event_sequence SET owner_id = NULL WHERE owner_id IS NOT NULL")
+    const eventColumns = db
+      .prepare("PRAGMA table_info(event_sequence)")
+      .all()
+      .map((row) => String(row.name))
+    if (eventColumns.includes("owner_id"))
+      db.exec("UPDATE event_sequence SET owner_id = NULL WHERE owner_id IS NOT NULL")
     for (const table of profileTables) {
       if (!db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name = ?").get(table)) continue
       const info = db.prepare(`PRAGMA table_info(${quote(table)})`).all()
@@ -259,7 +269,8 @@ export function stageProfileDatabase(
         )
       }
     }
-    if (db.prepare("PRAGMA quick_check").get()?.quick_check !== "ok") throw new ProfileImportFailure("invalid")
+    if (db.prepare("PRAGMA quick_check").get()?.quick_check !== "ok" || db.prepare("PRAGMA foreign_key_check").get())
+      throw new ProfileImportFailure("invalid")
     db.exec("COMMIT")
   } catch (error) {
     db.exec("ROLLBACK")
