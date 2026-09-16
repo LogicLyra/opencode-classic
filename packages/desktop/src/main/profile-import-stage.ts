@@ -41,7 +41,7 @@ import {
 import {
   assertFreshProfile,
   closeProfileDatabase,
-  copyProfileDatabase,
+  stageProfileDatabase,
   inspectProfileDatabase,
   openProfileDatabase,
 } from "./profile-import-database"
@@ -237,7 +237,7 @@ export function runProfileImport(input: ProfileImportInput): { summary: ProfileI
             const next = join(staged.data, "snapshot", row.project_id, hash(mapped))
             if (existsSync(old) && !existsSync(next)) renameSync(old, next)
           }
-          copyProfileDatabase(source, destination, join(staged.data, basename(input.destination)), input.source, target)
+          stageProfileDatabase(snapshot, join(staged.data, basename(input.destination)), input.source, target)
           if (databaseFingerprint(database) !== before)
             throw new ProfileImportFailure("source-busy", { category: "database-final" })
           let stableFiles = false

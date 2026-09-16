@@ -191,16 +191,36 @@ describe("full profile import", () => {
     expect(existsSync(tmp.paths.stage)).toBe(false)
   })
 
-  test("never executes source triggers or copies executable SQL", async () => {
+  test("strips source triggers and views while keeping their tables intact", async () => {
     using tmp = await fixture()
     const db = new DatabaseSync(join(tmp.source.data, "opencode.db"))
     db.exec("CREATE TRIGGER malicious AFTER INSERT ON session BEGIN DELETE FROM credential; END")
+    db.exec("CREATE VIEW sneaky AS SELECT access_token FROM account")
     db.close()
     stage(tmp.input)
     activateProfileImport(tmp.userData)
     const dest = new DatabaseSync(tmp.destination)
     expect(dest.prepare("SELECT name FROM sqlite_master WHERE type='trigger'").all()).toEqual([])
+    expect(dest.prepare("SELECT name FROM sqlite_master WHERE type='view'").all()).toEqual([])
     expect(dest.prepare("SELECT count(*) AS n FROM credential").get()?.n).toBe(1)
+    dest.close()
+  })
+
+  test("imports older-journal sources and leaves pending migrations to the app", async () => {
+    using tmp = await fixture()
+    const db = new DatabaseSync(join(tmp.source.data, "opencode.db"))
+    db.exec("DELETE FROM migration WHERE id = (SELECT id FROM migration ORDER BY id DESC LIMIT 1)")
+    db.close()
+    stage(tmp.input)
+    activateProfileImport(tmp.userData)
+    const dest = new DatabaseSync(tmp.destination)
+    const remaining = dest.prepare("SELECT count(*) AS n FROM migration").get()?.n
+    const all = new DatabaseSync(join(tmp.source.data, "opencode.db"), { readOnly: true })
+    const original = all.prepare("SELECT count(*) AS n FROM migration").get()?.n
+    all.close()
+    expect(remaining).toBe(original)
+    expect(dest.prepare("SELECT title FROM session").get()?.title).toBe("Keep me")
+    expect(dest.prepare("PRAGMA quick_check").get()?.quick_check).toBe("ok")
     dest.close()
   })
 
