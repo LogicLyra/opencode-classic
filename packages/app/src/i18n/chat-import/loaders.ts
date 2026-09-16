@@ -9,4 +9,11 @@ export const chatImportLoaders: Partial<
   Record<Exclude<DesktopNativeLocale, "en">, () => Promise<ChatImportSource>>
 > = {
   de: () => import("./de"),
+  nl: () => import("./nl"),
+  fr: () => import("./fr"),
+  es: () => import("./es"),
+  it: () => import("./it"),
+  br: () => import("./br"),
+  ca: () => import("./ca"),
+  ro: () => import("./ro"),
 }
