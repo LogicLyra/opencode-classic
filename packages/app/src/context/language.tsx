@@ -6,6 +6,7 @@ import { pluralCategory, type UiI18nPluralKey } from "@opencode-ai/ui/context/i1
 import { Persist, persisted } from "@/utils/persist"
 import { dict as en } from "@/i18n/en"
 import { chatImportEnglish } from "@/i18n/chat-import"
+import { chatImportLoaders } from "@/i18n/chat-import/loaders"
 import { dict as uiEn } from "@opencode-ai/ui/i18n/en"
 import {
   createDesktopNativeBundle,
@@ -119,10 +120,15 @@ function loadDict(locale: Locale) {
   if (hit) return Promise.resolve(hit)
   if (locale === "en") return Promise.resolve(base)
   const load = loaders[locale]
-  return load().then((next: Dictionary) => {
-    dicts.set(locale, next)
-    return next
-  })
+  const fork = chatImportLoaders[locale]
+  return load()
+    .then((next: Dictionary) =>
+      fork ? fork().then((source) => ({ ...next, ...i18n.flatten(source.dict) }) as Dictionary) : next,
+    )
+    .then((next: Dictionary) => {
+      dicts.set(locale, next)
+      return next
+    })
 }
 
 export function loadLocaleDict(locale: Locale) {

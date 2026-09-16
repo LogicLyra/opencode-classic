@@ -10,9 +10,12 @@
 <p align="center">AI-kodeagent med åpen kildekode.</p>
 <p align="center">
   <a href="https://opencode.ai/discord"><img alt="Discord" src="https://img.shields.io/discord/1391832426048651334?style=flat-square&label=discord" /></a>
-  <a href="https://www.npmjs.com/package/opencode-ai"><img alt="npm" src="https://img.shields.io/npm/v/opencode-ai?style=flat-square" /></a>
-  <a href="https://github.com/anomalyco/opencode/actions/workflows/publish.yml"><img alt="Build status" src="https://img.shields.io/github/actions/workflow/status/anomalyco/opencode/publish.yml?style=flat-square&branch=dev" /></a>
+  <a href="https://github.com/LogicLyra/opencode-classic/actions/workflows/release-classic.yml"><img alt="Build status" src="https://img.shields.io/github/actions/workflow/status/LogicLyra/opencode-classic/release-classic.yml?style=flat-square&branch=dev" /></a>
 </p>
+
+> [!IMPORTANT]
+> OpenCode Classic er en uoffisiell Linux-fokusert fork som følger upstream; den bruker det klassiske skrivebordsoppsettet som standard, og det redesignede oppsettet forblir tilgjengelig i innstillingene. Utgivelser og oppdateringsprogrammet vedlikeholdes uavhengig i [`LogicLyra/opencode-classic`](https://github.com/LogicLyra/opencode-classic). Forkens egne seksjoner og installasjonslenker i hver oversatt README holdes synkronisert med engelsk; dypere innhold arves fra upstream og kan henge etter.
+
 
 <p align="center">
   <a href="README.md">English</a> |
@@ -43,60 +46,151 @@
 
 ---
 
+### Ta med oppsettet ditt fra OpenCode
+
+OpenCode Classic Desktop bruker en separat profil for den innebygde
+serveren. **Innstillinger > Chat-import** og dialogen ved første oppstart
+tilbyr **Kun chatter** og **Alt (fullt oppsett)**. Følgende
+fletteatferd gjelder for **Kun chatter**:
+Ved første oppstart, eller under **Innstillinger > Chat-import**, velg
+**Kontroller standard-OpenCode-databasen**, eller velg en `.db`-fil. Lukk
+OpenCode først, se gjennom kilde, mål og antall, og velg deretter
+**Importer kvalifiserte chatter**.
+
+- Standardkilden er `$XDG_DATA_HOME/opencode/opencode.db`, normalt
+  `~/.local/share/opencode/opencode.db`. Velg en fil for egendefinerte
+  stier eller utviklingskanaldatabaser. Målet er den aktive innebygde
+  skrivebordsserverens database under Classic-skrivebordsprofilens
+  `sidecar`-mappe. Importverktøyet støtter ikke fjerneforbindelser
+  eller eksperimentelle bakgrunnsserverforbindelser.
+- Det innledende importverktøyet støtter samsvarende SQLite-skjemaer og
+  migreringshistorikker. Det migrerer ikke kildefiler og importerer ikke
+  eldre JSON-lagring. Hvis kompatibilitetskontrollene feiler, bruk
+  kompatible OpenCode- og Classic-versjoner og forhåndsvis igjen.
+- Fullførte lokale chatter beholder ID-ene, titlene, tidsstemplene,
+  meldingene, delene, v2-historikken, gjøremålene og de opprinnelige
+  prosjektstiene. Eksisterende chatter-ID-er hoppes over som en helhet;
+  reimport oppdaterer ikke en allerede importert chatter. Kilden er
+  skrivebeskyttet, inkludert WAL-historikken, og hver import commit'eres
+  atomært.
+- Chatter med prompter i kø, uferdig arbeid eller eksplisitt
+  arbeidsområdeplassering utelates og telles. Import starter aldri en
+  prompt og kjører aldri en kommando. Pådloggingsopplysninger,
+  kontotilstand, tildelte tillatelser, prosjektkommandoer,
+  delingseierskap, eksterne vedlegg, Git-øyeblikksbilder og
+  skrivebordskladder kopieres ikke. Logg inn separat og behold
+  prosjektmappene dine på de opprinnelige stiene. Historiske
+  angre-øyeblikksbilder er utilgjengelige; innebygde vedleggsdata blir
+  værende i transkripsjonen, mens eksterne filer fortsatt må eksistere.
+- Åpne den opprinnelige prosjektmappen i Classic for å se de
+  importerte chatterne. Dette er en engangskopi, ikke løpende
+  synkronisering mellom applikasjoner.
+
+#### Alt (fullt oppsett)
+
+Lukk OpenCode og stopp andre skrivende prosesser først. Velg
+**Forhåndsvis standardoppsettet**, eller **Velg oppsettmapper**, og merk
+OpenCodes **data**-, **konfigurasjons**- og **tilstandsmapper**. De ligger
+normalt i `~/.local/share/opencode`, `~/.config/opencode` og
+`~/.local/state/opencode`; XDG-overstyringer respekteres. Se gjennom
+antallene, bekreft at du stoler på oppsettet, bekreft i den native
+dialogen, og start Classic på nytt for å aktivere den klargjorte
+profilen.
+
+- Krever en tom innebygget Linux-profil i Classic. Eksisterende chatter,
+  tilbydere, egendefinerte innstillinger, kontoer og registrerte
+  prosjekter overskrives aldri. Genererte standardkonfigurasjons-/
+  pluginfiler gjenkjennes som bootstrap-tilstand.
+- Kopierer alle 19 applikasjonsdatabasetabellene, tilbydernes
+  `auth.json`, skykontoer, integrasjonspåloggingsopplysninger,
+  tillatelser, delingsmetadata, konfigurasjonsfiler (inkludert JSONC),
+  agenter, ferdigheter, plugins, tilstand, planer, verktøyutdata,
+  arbeidsområdefiler og øyeblikksbilder. Ventende prompter blir værende
+  i kø; importen utfører dem ikke.
+- Eksterne prosjektstier forblir uendret på samme maskin. Interne stier,
+  tillatelsesmønstre og øyeblikksbildenøkler remappes. Koblede
+  arbeidstrær mottar privat Git-metadata, og alternates for
+  øyeblikksbildeobjekter materialiseres, så kopiene ikke avhenger av de
+  opprinnelige objektlagrene.
+- SQLite leser en privat kopi av kilde-DN/WAL. Kilde-DN, WAL og
+  shared-memory-filer etterlates uendret. Klargjøring bruker private
+  tillatelser og en holdbar eierskapsjournal. Aktivering skjer før den
+  innebygde serveren starter, og gjenoppretter avbrutte
+  mappenavnendringer. Den opprinnelige tomme/bootstrap-profilen beholdes
+  under `.profile-import-retained-<operation-id>` i Classics
+  skrivebordsprofil for inspeksjon; den slettes ikke automatisk.
+- Påloggingsopplysningene forblir beskyttede lokale filer. Fullt oppsett
+  bevarer også kjørbar atferd: kontooppdatering, avhengighetsinstallasjon,
+  plugins, MCP-tilkoblinger, prosjektkommandoer, Git-hooks/hjelpere og
+  tildelte tillatelser kan tre i kraft under normal bruk etter
+  aktivering. Importer bare et oppsett du stoler på. Rotasjon av
+  OAuth-tokens kan kreve ny pålogging når begge applikasjonene brukes.
+- Logger, cacher og prosesslåser genereres på nytt. Systemprogrammer,
+  shell-miljøvariabler, upstreams
+  skrivebordsvindu-/sidefeltpreferanser og skrivebordskladder kopieres
+  ikke. Eksterne prosjektfiler deles allerede på de opprinnelige stiene.
+  Åpne den opprinnelige prosjektmappen for å få tilgang til chatterne.
+- Krever samsvarende SQLite-migreringshistorikk og -skjema. Fullt
+  oppsett leser for tiden `opencode.db`; miljøleverte database-/
+  konfigurasjons-/autentiseringsoverstyringer må fjernes før bruk.
+  Eldre rene JSON-lagre, sykliske eller ikke-støttede
+  Git-objektreferanser, enhetsnoder og profiler over 50 GiB eller
+  500 000 lagerføringer avvises med en bestemt begrunnelse. Eksterne
+  symbolske lenker kopieres hele veien (materialiseres); hengende
+  lenker, sockets og fifos hoppes over og telles i sammendraget.
+  Konfigurasjonsfiler opp til 64 MB støttes. Klargjøring krever
+  ytterligere diskplass.
+- Lukk OpenCode før import. Forhåndsvisningen advarer når en kjørende
+  instans oppdages, øyeblikksbildkopier prøves automatisk på nytt, og en
+  kilde som skrives kontinuerlig, rapporterer en dedikert opptatt-feil
+  som ber deg lukke den.
+
+Den frittstående Classic-CLI-en bruker fortsatt OpenCodes
+standard-XDG-roter med mindre du overstyrer dem. `uninstall`-kommandoen
+bevarer data, påloggingsopplysninger, konfigurasjon, cache og tilstand
+som standard, også med `--force`. Sletting av disse delte rote krever
+`--remove-shared-data`; `--keep-data` og `--keep-config` overstyrer det
+forespørslene for sine respektive roter. Bruk `uninstall --dry-run` for
+å se gjennom stier. Upstreams egen avinstallering kan fortsatt slette
+delte CLI-data. Forken nekter å åpne databaser som inneholder ukjente
+migreringer; oppdater Classic i stedet for å redigere eller slette en
+migreringsjournal.
+
 ### Installasjon
 
 ```bash
-# YOLO
-curl -fsSL https://opencode.ai/install | bash
-
-# Pakkehåndterere
-npm i -g opencode-ai@latest        # eller bun/pnpm/yarn
-scoop install opencode             # Windows
-choco install opencode             # Windows
-brew install anomalyco/tap/opencode # macOS og Linux (anbefalt, alltid oppdatert)
-brew install opencode              # macOS og Linux (offisiell brew-formel, oppdateres sjeldnere)
-sudo pacman -S opencode            # Arch Linux (Stable)
-paru -S opencode-bin               # Arch Linux (Latest from AUR)
-mise use -g opencode               # alle OS
-nix run nixpkgs#opencode           # eller github:anomalyco/opencode for nyeste dev-branch
+curl -fsSL https://github.com/LogicLyra/opencode-classic/releases/latest/download/install | bash
 ```
 
-> [!TIP]
-> Fjern versjoner eldre enn 0.1.x før du installerer.
+> [!WARNING]
+> npm-pakken `opencode-ai` og de eksisterende Homebrew-, Scoop-, Chocolatey-, AUR- og Nix-pakkene distribuerer upstream-OpenCode, ikke OpenCode Classic.
 
-### Desktop-app (BETA)
+### Skrivebordsapp (BETA)
 
-OpenCode er også tilgjengelig som en desktop-app. Last ned direkte fra [releases-siden](https://github.com/anomalyco/opencode/releases) eller [opencode.ai/download](https://opencode.ai/download).
+OpenCode Classic-skrivebordsbygg støtter kun Linux og er tilgjengelige fra [forkens utgivelsesside](https://github.com/LogicLyra/opencode-classic/releases).
 
-| Plattform             | Nedlasting                         |
-| --------------------- | ---------------------------------- |
-| macOS (Apple Silicon) | `opencode-desktop-mac-arm64.dmg`   |
-| macOS (Intel)         | `opencode-desktop-mac-x64.dmg`     |
-| Windows               | `opencode-desktop-windows-x64.exe` |
-| Linux                 | `.deb`, `.rpm` eller AppImage      |
+| Plattform  | Nedlasting                                            |
+| ---------- | ----------------------------------------------------- |
+| Linux x64  | `opencode-classic-desktop-linux-*` (`.deb` eller `.rpm`) |
 
-```bash
-# macOS (Homebrew)
-brew install --cask opencode-desktop
-# Windows (Scoop)
-scoop bucket add extras; scoop install extras/opencode-desktop
-```
+AppImage distribueres bevisst ikke. Ubuntu 24.04 og nyere kan tvinge Electron-AppImages til å deaktivere Chromium-sandboxing under standard AppArmor-policyen; de installerte deb- og RPM-formatene beholder sandbox-integrasjonen distribusjonen forventer.
+
+Vedlikeholderne kan reprodusere den komplette bygge-, pakke-, installert-deb- og visuelle utgivelsesporten med [Linux VM-utgivelses-QA-runbooken](docs/linux-vm-qa.md).
 
 #### Installasjonsmappe
 
-Installasjonsskriptet bruker følgende prioritet for installasjonsstien:
+Installasjonsskriptet respekterer følgende prioritetsrekkefølge for installasjonsstien:
 
 1. `$OPENCODE_INSTALL_DIR` - Egendefinert installasjonsmappe
-2. `$XDG_BIN_DIR` - Sti som følger XDG Base Directory Specification
-3. `$HOME/bin` - Standard brukerbinar-mappe (hvis den finnes eller kan opprettes)
+2. `$XDG_BIN_DIR` - Sti i samsvar med XDG Base Directory Specification
+3. `$HOME/bin` - Standard mappe for brukerbinærfiler (hvis den finnes eller kan opprettes)
 4. `$HOME/.opencode/bin` - Standard fallback
 
 ```bash
 # Eksempler
-OPENCODE_INSTALL_DIR=/usr/local/bin curl -fsSL https://opencode.ai/install | bash
-XDG_BIN_DIR=$HOME/.local/bin curl -fsSL https://opencode.ai/install | bash
+OPENCODE_INSTALL_DIR=/usr/local/bin curl -fsSL https://github.com/LogicLyra/opencode-classic/releases/latest/download/install | bash
+XDG_BIN_DIR=$HOME/.local/bin curl -fsSL https://github.com/LogicLyra/opencode-classic/releases/latest/download/install | bash
 ```
-
 ### Agents
 
 OpenCode har to innebygde agents du kan bytte mellom med `Tab`-tasten.
