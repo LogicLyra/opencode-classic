@@ -14,7 +14,7 @@
 </p>
 
 > [!IMPORTANT]
-> OpenCode Classic 是一个以 Linux 为重点的非官方分支，跟踪上游，默认使用经典桌面布局，并可在设置中启用重新设计的布局。其发布和更新程序在 [`LogicLyra/opencode-classic`](https://github.com/LogicLyra/opencode-classic) 独立维护。每个翻译版 README 中特定于分支的章节和安装链接与英文版保持同步；更深层次的内容继承自上游，可能滞后。
+> OpenCode Classic 是一个以 Linux 为重点的非官方分支，跟踪上游，默认使用经典桌面布局，并可在设置中启用重新设计的布局。其发布和更新程序在 [`LogicLyra/opencode-classic`](https://github.com/LogicLyra/opencode-classic) 独立维护。更深层次的内容继承自上游，可能滞后。
 
 
 <p align="center">

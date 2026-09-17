@@ -14,7 +14,7 @@
 </p>
 
 > [!IMPORTANT]
-> OpenCode Classic はアップストリームを追従する非公式の Linux 向けフォークです。既定でクラシックなデスクトップレイアウトを使用し、再設計されたレイアウトは設定から利用できます。リリースとアップデータは [`LogicLyra/opencode-classic`](https://github.com/LogicLyra/opencode-classic) で独立して管理されています。各翻訳 README のフォーク固有のセクションとインストールリンクは英語と同期されており、より深い内容はアップストリームから継承され、遅れる場合があります。
+> OpenCode Classic はアップストリームを追従する非公式の Linux 向けフォークです。既定でクラシックなデスクトップレイアウトを使用し、再設計されたレイアウトは設定から利用できます。リリースとアップデータは [`LogicLyra/opencode-classic`](https://github.com/LogicLyra/opencode-classic) で独立して管理されています。より深い内容はアップストリームから継承され、遅れる場合があります。
 
 
 <p align="center">

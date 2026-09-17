@@ -14,7 +14,7 @@
 </p>
 
 > [!IMPORTANT]
-> OpenCode Classic je neslužbeni fork orijentisan na Linux koji prati upstream; prema zadanim postavkama koristi klasični raspored radne površine, a preuređeni raspored ostaje dostupan u postavkama. Njegova izdanja i alat za ažuriranje održavaju se nezavisno u [`LogicLyra/opencode-classic`](https://github.com/LogicLyra/opencode-classic). Odjeljci specifični za fork i veze za instalaciju u svakom prevedenom README-u održavaju se sinhronizovanim s engleskim; dublji sadržaj se nasljeđuje od upstreama i može kasniti.
+> OpenCode Classic je neslužbeni fork orijentisan na Linux koji prati upstream; prema zadanim postavkama koristi klasični raspored radne površine, a preuređeni raspored ostaje dostupan u postavkama. Njegova izdanja i alat za ažuriranje održavaju se nezavisno u [`LogicLyra/opencode-classic`](https://github.com/LogicLyra/opencode-classic). Dublji sadržaj se nasljeđuje od upstreama i može kasniti.
 
 
 <p align="center">

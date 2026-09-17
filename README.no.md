@@ -14,7 +14,7 @@
 </p>
 
 > [!IMPORTANT]
-> OpenCode Classic er en uoffisiell Linux-fokusert fork som følger upstream; den bruker det klassiske skrivebordsoppsettet som standard, og det redesignede oppsettet forblir tilgjengelig i innstillingene. Utgivelser og oppdateringsprogrammet vedlikeholdes uavhengig i [`LogicLyra/opencode-classic`](https://github.com/LogicLyra/opencode-classic). Forkens egne seksjoner og installasjonslenker i hver oversatt README holdes synkronisert med engelsk; dypere innhold arves fra upstream og kan henge etter.
+> OpenCode Classic er en uoffisiell Linux-fokusert fork som følger upstream; den bruker det klassiske skrivebordsoppsettet som standard, og det redesignede oppsettet forblir tilgjengelig i innstillingene. Utgivelser og oppdateringsprogrammet vedlikeholdes uavhengig i [`LogicLyra/opencode-classic`](https://github.com/LogicLyra/opencode-classic). Dypere innhold arves fra upstream og kan henge etter.
 
 
 <p align="center">

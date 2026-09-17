@@ -14,7 +14,7 @@
 </p>
 
 > [!IMPORTANT]
-> OpenCode Classic는 업스트림을 추적하는 비공식 Linux 중심 포크입니다. 기본적으로 클래식 데스크톱 레이아웃을 사용하며, 재디자인된 레이아웃은 설정에서 사용할 수 있습니다. 릴리스와 업데이터는 [`LogicLyra/opencode-classic`](https://github.com/LogicLyra/opencode-classic)에서 독립적으로 관리됩니다. 각 번역 README의 포크 고유 섹션과 설치 링크는 영어와 동기화되며, 더 깊은 내용은 업스트림에서 상속되어 늦어질 수 있습니다.
+> OpenCode Classic는 업스트림을 추적하는 비공식 Linux 중심 포크입니다. 기본적으로 클래식 데스크톱 레이아웃을 사용하며, 재디자인된 레이아웃은 설정에서 사용할 수 있습니다. 릴리스와 업데이터는 [`LogicLyra/opencode-classic`](https://github.com/LogicLyra/opencode-classic)에서 독립적으로 관리됩니다. 더 깊은 내용은 업스트림에서 상속되어 늦어질 수 있습니다.
 
 
 <p align="center">
