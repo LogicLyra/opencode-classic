@@ -67,6 +67,10 @@ export const dict = {
     "Bu kurulum desteklenmeyen bağlantılar, döngüsel Git nesnesi alternates'leri, özel dosyalar içeriyor veya içe aktarma sınırını aşıyor (50 GiB / 500.000 öğe). Dış sembolik bağlantılar içe aktarmadan önce somutlaştırılmalıdır; kaynak dosyalar değiştirilmedi.",
   "profileImport.error.space":
     "Bu kurulumu hazırlamak için yeterli boş disk alanı yok. Alan açın ve yeniden önizleyin.",
+  "profileImport.resetHint":
+    "Sıfırlama, geçerli Classic profilini — sohbetler, oturum açma bilgileri, bulut hesapları, ayarlar, izinler ve çalışma alanları — siler ve yerine içe aktarılan kurulumu koyar. Bu işlem geri alınamaz.",
+  "profileImport.reset": "Classic'i sıfırla ve her şeyi içe aktar",
+  "profileImport.resetConfirm": "Classic'i sil ve her şeyi içe aktar",
   "chatImport.tab": "Sohbet içe aktarma",
   "chatImport.title": "OpenCode'dan sohbetleri içe aktar",
   "chatImport.description":

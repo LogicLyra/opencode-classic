@@ -41,6 +41,7 @@ import {
 import {
   assertFreshProfile,
   closeProfileDatabase,
+  resetProfileData,
   stageProfileDatabase,
   inspectProfileDatabase,
   openProfileDatabase,
@@ -55,6 +56,7 @@ export type ProfileImportInput = {
   userData: string
   destination: string
   fingerprint?: string
+  reset?: boolean
   scratch?: string
 }
 
@@ -102,7 +104,12 @@ export function runProfileImport(input: ProfileImportInput): { summary: ProfileI
   const roots = [input.source.config, input.source.data, input.source.state]
   if (roots.some((root, i) => roots.some((other, j) => i !== j && inside(root, other))))
     throw new ProfileImportFailure("unsupported")
-  assertFreshProfile(paths.live, input.destination)
+  // Reset preview only relaxes the destination freshness checks so a used
+  // Classic profile can be previewed. The erase itself runs exclusively on
+  // the confirmed pass, after the native consent dialog, never at preview.
+  const resetPreview = input.reset === true && !input.fingerprint
+  if (input.reset && input.fingerprint) resetProfileData(input.userData, input.destination)
+  if (!resetPreview) assertFreshProfile(paths.live, input.destination)
   const database = join(input.source.data, "opencode.db")
   if (realpathSync(database) !== database) throw new ProfileImportFailure("unsupported")
   const inventory = inventoryProfile(input.source)
@@ -152,7 +159,7 @@ export function runProfileImport(input: ProfileImportInput): { summary: ProfileI
     try {
       const destination = openProfileDatabase(input.destination)
       try {
-        inspectProfileDatabase(source, destination)
+        inspectProfileDatabase(source, destination, resetPreview)
         const count = (table: string) => Number(source.prepare(`SELECT count(*) AS n FROM ${table}`).get()?.n)
         const summary: ProfileImportSummary = {
           config: input.source.config,

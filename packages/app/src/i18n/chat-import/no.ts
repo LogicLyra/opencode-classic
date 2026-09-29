@@ -67,6 +67,10 @@ export const dict = {
     "Dette oppsettet inneholder ustøttede lenker, sykliske Git-objektalternates, spesielle filer eller overskrider importgrensen (50 GiB / 500 000 elementer). Eksterne symlinker må materialiseres før import; kildefilene ble ikke endret.",
   "profileImport.error.space":
     "Det er ikke nok ledig diskplass til å klargjøre dette oppsettet. Frigjør plass og kjør forhåndsvisningen på nytt.",
+  "profileImport.resetHint":
+    "Tilbakestilling sletter den nåværende Classic-profilen — chatter, påloggingsopplysninger, skykontoer, innstillinger, tillatelser og arbeidsområder — og erstatter den med det importerte oppsettet. Dette kan ikke angres.",
+  "profileImport.reset": "Tilbakestill Classic og importer alt",
+  "profileImport.resetConfirm": "Slett Classic og importer alt",
   "chatImport.tab": "Chatimport",
   "chatImport.title": "Importer chatter fra OpenCode",
   "chatImport.description":

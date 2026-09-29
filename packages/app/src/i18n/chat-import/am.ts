@@ -67,6 +67,10 @@ export const dict = {
     "ይህ ማዋቀር የማይደገፉ አገናኞችን፣ የዑደት Git ነገር alternatesን፣ ልዩ ፋይሎችን ይዟል ወይም የማግቢያ ገደቡን ይበልጣል (50 GiB / 500,000 ንጥሎች)። የውጭ ምልክት አገናኞች ከመግባቱ በፊት ወደ ትክክለኛ ፋይሎች መለወጥ አለባቸው፤ የምንጭ ፋይሎች አልተቀየሩም።",
   "profileImport.error.space":
     "ይህን ማዋቀር ለማዘጋጀት በቂ ነጻ የዲስክ ቦታ የለም። ቦታ ያስለቅቁ እና እንደገና ቅድመ እይታ ያድርጉ።",
+  "profileImport.resetHint":
+    "መመለሱ የአሁኑን የ Classic መገለጫ — ውይይቶች፣ የመግቢያ መረጃዎች፣ የደመና መለያዎች፣ ማዋቀሮች፣ ፍቃዶች እና የሥራ ቦታዎች — ይሰርዛል፤ በማግቢያው ማዋቀር ይተካል። ይህ መመለስ አይቻልም።",
+  "profileImport.reset": "Classic እንደነበር አድርገህ ሁሉንም አስገባ",
+  "profileImport.resetConfirm": "Classic አጥፋና ሁሉንም አስገባ",
   "chatImport.tab": "የውይይት ማግቢያ",
   "chatImport.title": "ከ OpenCode ውይይቶችን አስገባ",
   "chatImport.description":

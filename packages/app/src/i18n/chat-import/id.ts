@@ -67,6 +67,10 @@ export const dict = {
     "Penyiapan ini berisi tautan yang tidak didukung, alternates objek Git siklik, file khusus, atau melebihi batas impor (50 GiB / 500.000 item). Tautan simbolik eksternal harus dimaterialisasi sebelum impor; file sumber tidak diubah.",
   "profileImport.error.space":
     "Tidak ada cukup ruang disk kosong untuk menyiapkan penyiapan ini. Kosongkan ruang dan pratinjau kembali.",
+  "profileImport.resetHint":
+    "Penyetelan ulang menghapus profil Classic saat ini — obrolan, informasi masuk, akun cloud, pengaturan, izin, dan ruang kerja — dan menggantinya dengan penyiapan yang diimpor. Tindakan ini tidak dapat dibatalkan.",
+  "profileImport.reset": "Setel ulang Classic dan impor semuanya",
+  "profileImport.resetConfirm": "Hapus Classic dan impor semuanya",
   "chatImport.tab": "Impor obrolan",
   "chatImport.title": "Impor obrolan dari OpenCode",
   "chatImport.description":

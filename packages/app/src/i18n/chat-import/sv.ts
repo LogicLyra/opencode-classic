@@ -67,6 +67,10 @@ export const dict = {
     "Denna konfiguration innehåller ostödda länkar, cykliska Git-objektalternates, specialfiler eller överskrider importgränsen (50 GiB / 500 000 objekt). Externa symlänkar måste materialiseras före importen; källfilerna ändrades inte.",
   "profileImport.error.space":
     "Det finns inte tillräckligt med ledigt diskutrymme för att förbereda denna konfiguration. Frigör utrymme och kör förhandsgranskningen igen.",
+  "profileImport.resetHint":
+    "Återställning raderar den aktuella Classic-profilen — chattar, inloggningsuppgifter, molnkonton, inställningar, behörigheter och arbetsytor — och ersätter den med den importerade konfigurationen. Detta kan inte ångras.",
+  "profileImport.reset": "Återställ Classic och importera allt",
+  "profileImport.resetConfirm": "Radera Classic och importera allt",
   "chatImport.tab": "Chattimport",
   "chatImport.title": "Importera chattar från OpenCode",
   "chatImport.description":

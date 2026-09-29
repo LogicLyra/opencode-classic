@@ -67,6 +67,10 @@ export const dict = {
     "See seadistus sisaldab toetamata linke, tsüklilisi Git-i objektialternates-e, erifail-e või ületab impordi piiri (50 GiB / 500 000 üksust). Välised symlink-id tuleb enne importi materialiseerida; allikafaile ei muudetud.",
   "profileImport.error.space":
     "Selle seadistuse ettevalmistamiseks ei ole piisavalt vaba kettaruumi. Vabasta ruumi ja tee eelvaade uuesti.",
+  "profileImport.resetHint":
+    "Lähtestamine kustutab praeguse Classic-i profiili — vestlused, sisselogimisandmed, pilvekonto-d, seaded, õigused ja tööruumid — ning asendab selle imporditud seadistusega. Seda ei saa tagasi võtta.",
+  "profileImport.reset": "Lähtesta Classic ja impordi kõik",
+  "profileImport.resetConfirm": "Kustuta Classic ja impordi kõik",
   "chatImport.tab": "Vestluste import",
   "chatImport.title": "Impordi vestlused OpenCode'ist",
   "chatImport.description":

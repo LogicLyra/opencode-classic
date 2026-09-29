@@ -67,6 +67,10 @@ export const dict = {
     "Şu ýygnamakda goldanylmaýan baglanyşyklar, halka ýaly Git obýekt alternates, aýratyn faýllar bar ýa-da import çäkden geçýär (50 GiB / 500 000 element). Daşarky symlink-lar importdan öň hakyky faýla öwrülmeli; gödeniň faýllary üýtgedilmedi.",
   "profileImport.error.space":
     "Şu ýygnamagy taýýarlamak üçin ýeterlik boş disk ýeri ýok. Ýer boşadyň we ýene öňünden göriň.",
+  "profileImport.resetHint":
+    "Täzeden düzmek häzirki Classic profili — çatlar, giriş maglumatlary, bulut hasaplary, sazlamalar, rugsatlar we iş meýdanlary — poýaýar we import edilen ýygnamak bilen çalşyrýar. Muny yza gaýtaryp bolmaýar.",
+  "profileImport.reset": "Classic-i täzeden düz we ählisini import et",
+  "profileImport.resetConfirm": "Classic-i poz we ählisini import et",
   "chatImport.tab": "Çat importy",
   "chatImport.title": "OpenCode-dan çatlary import etmek",
   "chatImport.description":

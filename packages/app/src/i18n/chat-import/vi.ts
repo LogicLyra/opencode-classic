@@ -67,6 +67,10 @@ export const dict = {
     "Thiết lập này chứa liên kết không được hỗ trợ, alternates đối tượng Git vòng lặp, tệp đặc biệt, hoặc vượt quá giới hạn nhập (50 GiB / 500.000 mục). Các symlink bên ngoài phải được vật chất hóa trước khi nhập; các tệp nguồn không bị thay đổi.",
   "profileImport.error.space":
     "Không đủ dung lượng đĩa trống để chuẩn bị thiết lập này. Giải phóng dung lượng và xem trước lại.",
+  "profileImport.resetHint":
+    "Đặt lại sẽ xóa hồ sơ Classic hiện tại — các cuộc trò chuyện, thông tin đăng nhập, tài khoản đám mây, cài đặt, quyền và không gian làm việc — và thay thế bằng thiết lập đã nhập. Hành động này không thể hoàn tác.",
+  "profileImport.reset": "Đặt lại Classic và nhập toàn bộ",
+  "profileImport.resetConfirm": "Xóa Classic và nhập toàn bộ",
   "chatImport.tab": "Nhập trò chuyện",
   "chatImport.title": "Nhập trò chuyện từ OpenCode",
   "chatImport.description":

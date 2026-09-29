@@ -46,6 +46,6 @@ export type ProfileImportResult =
 
 export type ProfileImportPlatform = {
   status: () => Promise<ProfileImportResult | undefined>
-  preview: (browse?: boolean) => Promise<ProfileImportResult>
+  preview: (browse?: boolean, reset?: boolean) => Promise<ProfileImportResult>
   confirm: (token: string) => Promise<ProfileImportResult>
 }

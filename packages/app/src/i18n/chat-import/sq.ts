@@ -67,6 +67,10 @@ export const dict = {
     "Ky konfigurim përmban lidhje të pambështetuara, alternates ciklike të objekteve Git, skedarë specialë ose e tejkalon kufirin e importimit (50 GiB / 500 000 elementë). Lidhjet simbolike të jashtme duhen materializuar përpara importimit; skedarët e burimit nuk u ndryshuan.",
   "profileImport.error.space":
     "Nuk ka hapësirë të mjaftueshme të lirë në disk për të përgatitur këtë konfigurim. Liro hapësirë dhe bëj parapamjen përsëri.",
+  "profileImport.resetHint":
+    "Rivendosja fshin profilin aktual të Classic — bisedat, kredencialet, llogaritë në cloud, cilësimet, lejet dhe hapësirat e punës — dhe e zëvendëson me konfigurimin e importuar. Kjo nuk mund të zhbëhet.",
+  "profileImport.reset": "Rivendos Classic dhe importo gjithçka",
+  "profileImport.resetConfirm": "Fshi Classic dhe importo gjithçka",
   "chatImport.tab": "Importimi i bisedave",
   "chatImport.title": "Importo biseda nga OpenCode",
   "chatImport.description":

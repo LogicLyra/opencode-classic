@@ -67,6 +67,10 @@ export const dict = {
     "Ši konfigūracija turi nepalaikomų nuorodų, cikliškų Git objektų alternates, specialiųjų failų arba viršija importavimo ribą (50 GiB / 500 000 elementų). Išorinės simbolinės nuorodos prieš importavimą turi būti materializuotos; šaltinio failai nebuvo pakeisti.",
   "profileImport.error.space":
     "Nėra pakankamai laisvos disko vietos šiai konfigūracijai paruošti. Atlaisvinkite vietos ir peržiūrėkite dar kartą.",
+  "profileImport.resetHint":
+    "Nustatymas iš naujo ištrina dabartinį Classic profilį — pokalbius, prisijungimo duomenis, debesų sąskaitas, nustatymus, leidimus ir darbo sritis — ir pakeičia juos importuota konfigūracija. To atšaukti negalima.",
+  "profileImport.reset": "Nustatyti Classic iš naujo ir importuoti viską",
+  "profileImport.resetConfirm": "Ištrinti Classic ir importuoti viską",
   "chatImport.tab": "Pokalbių importavimas",
   "chatImport.title": "Importuoti pokalbius iš OpenCode",
   "chatImport.description":

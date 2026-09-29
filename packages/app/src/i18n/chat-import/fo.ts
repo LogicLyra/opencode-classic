@@ -67,6 +67,10 @@ export const dict = {
     "Hesin uppsetan inniheldur óstuðlaðar leinkjur, ringbendar Git-hlutartengingar, serligar fílur ella fer um innflutningsmarkið (50 GiB / 500.000 lutir). Ytru symlink-ar mugu gerðast evnisligir áðrenn innflutning; keldufílur vórðu ikki broyttar.",
   "profileImport.error.space":
     "Tær er ikki nóg mikið laust diskpláss fyri at klargera hesa uppsetan. Frigev pláss og undansýn aftur.",
+  "profileImport.resetHint":
+    "At stilla aftur strikar núverandi Classic-profil — samrøður, innritingarupplýsingar, skýbúkir, uppsetingar, loyvi og workspace-rúm — og setur innfluttu uppsetanina í staðin. Hetta ber ikki aftur.",
+  "profileImport.reset": "Still Classic aftur og flyt alt inn",
+  "profileImport.resetConfirm": "Strika Classic og flyt alt inn",
   "chatImport.tab": "Samrøðuinnflutningur",
   "chatImport.title": "Flyt samrøður inn úr OpenCode",
   "chatImport.description":

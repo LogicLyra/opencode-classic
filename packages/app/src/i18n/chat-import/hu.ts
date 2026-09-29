@@ -67,6 +67,10 @@ export const dict = {
     "Ez a beállítás nem támogatott linkeket, ciklikus Git-objektum-alternates-okat, különleges fájlokat tartalmaz, vagy meghaladja az importálási korlátot (50 GiB / 500 000 elem). A külső szimbolikus linkeket importálás előtt materializálni kell; a forrásfájlok nem változtak meg.",
   "profileImport.error.space":
     "Nincs elég szabad lemezterület ennek a beállításnak az előkészítéséhez. Szabadítson fel helyet, és nézze újra az előnézetet.",
+  "profileImport.resetHint":
+    "A visszaállítás törli a jelenlegi Classic profilt — csevegések, bejelentkezési adatok, felhőfiókok, beállítások, engedélyek és munkaterületek —, és az importált beállítással helyettesíti. Ez nem vonható vissza.",
+  "profileImport.reset": "Classic visszaállítása és minden importálása",
+  "profileImport.resetConfirm": "Classic törlése és minden importálása",
   "chatImport.tab": "Csevegésimportálás",
   "chatImport.title": "Csevegések importálása az OpenCode-ból",
   "chatImport.description":

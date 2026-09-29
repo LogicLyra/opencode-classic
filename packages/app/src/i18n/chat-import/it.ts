@@ -67,6 +67,10 @@ export const dict = {
     "Questa configurazione contiene link non supportati, alternates di oggetti Git ciclici, file speciali o supera il limite di importazione (50 GiB / 500.000 elementi). I symlink esterni devono essere materializzati prima dell'importazione; i file di origine non sono stati modificati.",
   "profileImport.error.space":
     "Non c'è spazio su disco sufficiente per preparare questa configurazione. Libera spazio ed esegui di nuovo l'anteprima.",
+  "profileImport.resetHint":
+    "La reimpostazione cancella il profilo Classic attuale — chat, credenziali, account cloud, impostazioni, autorizzazioni e aree di lavoro — e lo sostituisce con la configurazione importata. Questa azione non può essere annullata.",
+  "profileImport.reset": "Reimposta Classic e importa tutto",
+  "profileImport.resetConfirm": "Cancella Classic e importa tutto",
   "chatImport.tab": "Importazione chat",
   "chatImport.title": "Importa chat da OpenCode",
   "chatImport.description":

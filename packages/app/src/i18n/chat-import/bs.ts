@@ -67,6 +67,10 @@ export const dict = {
     "Ovo podešavanje sadrži nepodržane linkove, ciklične Git alternates objekte, posebne datoteke ili premašuje ograničenje uvoza (50 GiB / 500 000 stavki). Vanjske simboličke linkove potrebno je materializovati prije uvoza; izvorne datoteke nisu promijenjene.",
   "profileImport.error.space":
     "Nema dovoljno slobodnog prostora na disku za pripremu ovog podešavanja. Oslobodite prostor i ponovo pokrenite pregled.",
+  "profileImport.resetHint":
+    "Resetovanje briše trenutni Classic profil — razgovore, podatke za prijavu, račune u oblaku, postavke, dozvole i radne prostore — i zamjenjuje ga uvezenim podešavanjem. To se ne može poništiti.",
+  "profileImport.reset": "Resetuj Classic i uvezi sve",
+  "profileImport.resetConfirm": "Izbriši Classic i uvezi sve",
   "chatImport.tab": "Uvoz razgovora",
   "chatImport.title": "Uvezi razgovore iz OpenCodea",
   "chatImport.description":

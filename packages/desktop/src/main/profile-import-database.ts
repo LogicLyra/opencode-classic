@@ -1,11 +1,13 @@
 import { DatabaseSync, type SQLInputValue } from "node:sqlite"
-import { chmodSync, existsSync, lstatSync, readdirSync, realpathSync } from "node:fs"
-import { isAbsolute, join, relative } from "node:path"
+import { chmodSync, existsSync, lstatSync, mkdirSync, readdirSync, realpathSync, rmSync } from "node:fs"
+import { basename, isAbsolute, join, relative } from "node:path"
 import { migrations } from "../../../core/src/database/migration.gen"
 import { quote, validateHistory } from "./chat-import-database"
 import { copyDatabaseSnapshot, parseProfileConfig, secureRead } from "./profile-import-files"
 import {
+  assertProfileDestination,
   ProfileImportFailure,
+  profilePaths,
   profileRoots,
   remapProfileObject,
   remapProfilePath,
@@ -132,7 +134,42 @@ export function assertFreshProfile(root: string, database: string) {
   }
 }
 
-export function inspectProfileDatabase(source: DatabaseSync, destination: DatabaseSync) {
+// Explicit owner consent to discard the current Classic profile. Everything
+// inside the live sidecar root is erased except the destination database
+// file itself, whose schema is reused and whose rows are cleared. Nothing
+// outside that root is touched.
+export function resetProfileData(userData: string, database: string) {
+  assertProfileDestination(database, userData)
+  const paths = profilePaths(userData)
+  const roots = profileRoots(paths.live)
+  for (const name of readdirSync(paths.live)) {
+    if (name === "data") continue
+    rmSync(join(paths.live, name), { recursive: true, force: true })
+  }
+  for (const name of readdirSync(roots.data)) {
+    if (name === basename(database)) continue
+    rmSync(join(roots.data, name), { recursive: true, force: true })
+  }
+  for (const key of ["config", "state"] as const) mkdirSync(roots[key], { recursive: true, mode: 0o700 })
+  if (!existsSync(database)) throw new ProfileImportFailure("invalid")
+  const db = new DatabaseSync(database, { allowExtension: false })
+  try {
+    db.exec("PRAGMA trusted_schema=OFF; PRAGMA busy_timeout=3000; BEGIN IMMEDIATE")
+    for (const table of profileTables) db.exec(`DELETE FROM ${quote(table)}`)
+    db.exec("COMMIT")
+    db.exec("PRAGMA wal_checkpoint(TRUNCATE)")
+  } catch (error) {
+    try {
+      db.exec("ROLLBACK")
+    } catch {}
+    if (String(error).includes("SQLITE_BUSY")) throw new ProfileImportFailure("busy")
+    throw new ProfileImportFailure("invalid")
+  } finally {
+    db.close()
+  }
+}
+
+export function inspectProfileDatabase(source: DatabaseSync, destination: DatabaseSync, resetPreview = false) {
   const names = (db: DatabaseSync) =>
     db
       .prepare(
@@ -157,7 +194,9 @@ export function inspectProfileDatabase(source: DatabaseSync, destination: Databa
     .map((row) => String(row.id))
     .filter((id) => id !== "20260530232709_lovely_romulus")
   if (actual.some((id, index) => id !== history[index])) throw new ProfileImportFailure("incompatible")
-  assertFreshDatabase(destination)
+  // A reset preview deliberately inspects a used destination; the confirmed
+  // pass re-runs this check after the erase.
+  if (!resetPreview) assertFreshDatabase(destination)
   for (const [table, field] of [
     ["project", "worktree"],
     ["project_directory", "directory"],

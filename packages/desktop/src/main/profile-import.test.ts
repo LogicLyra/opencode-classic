@@ -153,6 +153,44 @@ describe("full profile import", () => {
     expect(() => runProfileImport(tmp.input)).toThrow("nonempty")
   })
 
+  test("reset preview passes a used profile without erasing it; confirmed reset replaces it", async () => {
+    using tmp = await fixture()
+    writeFileSync(join(tmp.target.config, "opencode.jsonc"), '{"model":"keep/model"}')
+    writeFileSync(join(tmp.target.data, "auth.json"), '{"keep":{"type":"api","key":"keep"}}')
+    const dirty = new DatabaseSync(tmp.destination)
+    dirty.exec(
+      "INSERT INTO project (id,worktree,time_created,time_updated,sandboxes) VALUES ('existing','/keep',1,1,'[]')",
+    )
+    dirty.close()
+    writeFileSync(join(tmp.paths.live, "keep-me"), "owner data")
+    expect(() => runProfileImport(tmp.input)).toThrow("nonempty")
+    const preview = runProfileImport({ ...tmp.input, reset: true })
+    expect(preview.summary.sessions).toBe(1)
+    expect(readFileSync(join(tmp.paths.live, "keep-me"), "utf8")).toBe("owner data")
+    expect(JSON.parse(readFileSync(join(tmp.target.data, "auth.json"), "utf8")).keep.type).toBe("api")
+    const untouched = new DatabaseSync(tmp.destination)
+    expect(untouched.prepare("SELECT count(*) AS n FROM project WHERE id = 'existing'").get()?.n).toBe(1)
+    untouched.close()
+    runProfileImport({ ...tmp.input, reset: true, fingerprint: preview.fingerprint })
+    expect(existsSync(join(tmp.paths.live, "keep-me"))).toBe(false)
+    expect(existsSync(join(tmp.target.data, "auth.json"))).toBe(false)
+    const cleared = new DatabaseSync(tmp.destination)
+    expect(cleared.prepare("SELECT count(*) AS n FROM project").get()?.n).toBe(0)
+    cleared.close()
+    activateProfileImport(tmp.userData)
+    const db = new DatabaseSync(tmp.destination)
+    expect(db.prepare("SELECT title FROM session").get()?.title).toBe("Keep me")
+    db.close()
+    expect(readFileSync(join(tmp.target.data, "auth.json"), "utf8")).toContain("API_SECRET_SENTINEL")
+  })
+
+  test("reset refuses while a journal, stage or backup exists", async () => {
+    using tmp = await fixture()
+    writeFileSync(join(tmp.target.config, "opencode.json"), "{}")
+    writeFileSync(tmp.paths.journal, "{}")
+    expect(() => runProfileImport({ ...tmp.input, reset: true })).toThrow("busy")
+  })
+
   test("rejects changed config or WAL content between preview and confirmation", async () => {
     using tmp = await fixture()
     const preview = runProfileImport(tmp.input)
@@ -548,6 +586,27 @@ describe("full profile import", () => {
     expect(await controller.preview(1, "/arbitrary/path")).toEqual({ status: "error", code: "unavailable" })
   })
 
+  test("controller threads the reset flag through consent and refuses non-boolean reset", async () => {
+    using tmp = await fixture()
+    writeFileSync(join(tmp.target.config, "opencode.json"), "{}")
+    let approvedReset = false
+    const controller = createProfileImportController({
+      destination: () => ({ database: tmp.destination, userData: tmp.userData }),
+      select: async () => tmp.source,
+      approve: async (_sender, _summary, reset) => {
+        approvedReset = reset
+        return true
+      },
+      run: async (input) => ({ status: "complete", ...runProfileImport(input) }),
+    })
+    expect(await controller.preview(1, false, "yes")).toEqual({ status: "error", code: "unavailable" })
+    const preview = await controller.preview(1, false, true)
+    if (preview.status !== "ready") throw new Error("reset preview failed")
+    expect(await controller.confirm(1, preview.token)).toEqual({ status: "staged" })
+    expect(approvedReset).toBe(true)
+    expect(existsSync(join(tmp.target.config, "opencode.json"))).toBe(false)
+  })
+
   test("native confirmation refusal does not stage a setup", async () => {
     using tmp = await fixture()
     const controller = createProfileImportController({
@@ -676,6 +735,39 @@ describe("full profile import", () => {
     expect(text.detail).toContain("Saved provider credentials: 2")
     expect(text.detail).toContain("Git checkouts: 9")
     expect(text.detail).toContain("Pending prompts remain queued until resumed")
+    expect(text.detail).not.toContain("{{")
+  })
+
+  test("reset consent copy states the erase and interpolates counts", () => {
+    const text = profileImportConsentText(
+      {
+        config: "/c",
+        data: "/d",
+        state: "/s",
+        sessions: 1,
+        providers: 2,
+        accounts: 3,
+        workspaces: 0,
+        files: 0,
+        bytes: 0,
+        live: false,
+        materialized: 0,
+        skipped: 0,
+        plugins: 4,
+        mcp: 5,
+        commands: 6,
+        permissions: 7,
+        pending: 8,
+        git: 9,
+      },
+      true,
+    )
+    expect(text.title).toBe("Reset Classic and import full setup")
+    expect(text.message).toBe("Erase the current Classic profile and replace it with this setup?")
+    expect(text.confirm).toBe("Erase Classic and import")
+    expect(text.detail).toContain("permanently deleted before the setup below is copied")
+    expect(text.detail).toContain("Replaces it with: saved provider credentials: 2")
+    expect(text.detail).toContain("Git checkouts: 9")
     expect(text.detail).not.toContain("{{")
   })
 })

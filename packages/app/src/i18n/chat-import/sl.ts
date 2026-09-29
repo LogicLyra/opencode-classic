@@ -67,6 +67,10 @@ export const dict = {
     "Ta namestitev vsebuje nepodprte povezave, ciklične alternates predmetov Git, posebne datoteke ali presega mejo uvoza (50 GiB / 500 000 elementov). Zunanje simbolne povezave je treba pred uvozom materializirati; izvorne datoteke niso bile spremenjene.",
   "profileImport.error.space":
     "Za pripravo te namestitve ni dovolj prostora na disku. Sprostite prostor in znova izvedite predogled.",
+  "profileImport.resetHint":
+    "Ponastavitev izbriše trenutni profil Classic — klepete, prijavne podatke, oblačne račune, nastavitve, dovoljenja in delovne prostore — in ga zamenja z uvoženo namestitvijo. Tega ni mogoče razveljaviti.",
+  "profileImport.reset": "Ponastavi Classic in uvozi vse",
+  "profileImport.resetConfirm": "Izbriši Classic in uvozi vse",
   "chatImport.tab": "Uvoz klepetov",
   "chatImport.title": "Uvozi klepete iz OpenCode",
   "chatImport.description":

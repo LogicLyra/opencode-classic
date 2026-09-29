@@ -67,6 +67,10 @@ export const dict = {
     "Toto nastavení obsahuje nepodporované odkazy, cyklické alternates objektů Gitu, speciální soubory nebo překračuje limit importu (50 GiB / 500 000 položek). Externí symbolické odkazy je před importem třeba materializovat; zdrojové soubory nebyly změněny.",
   "profileImport.error.space":
     "Pro přípravu tohoto nastavení není dost volného místa na disku. Uvolněte místo a náhled spusťte znovu.",
+  "profileImport.resetHint":
+    "Reset trvale smaže aktuální profil Classic — chaty, přihlašovací údaje, cloudové účty, nastavení, oprávnění a pracovní prostory — a nahradí jej importovaným nastavením. Tuto akci nelze vrátit.",
+  "profileImport.reset": "Resetovat Classic a importovat vše",
+  "profileImport.resetConfirm": "Vymazat Classic a importovat vše",
   "chatImport.tab": "Import chatů",
   "chatImport.title": "Importovat chaty z OpenCode",
   "chatImport.description":

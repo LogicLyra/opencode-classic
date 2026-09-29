@@ -10,9 +10,10 @@ export function ProfileImportPanel(props: { onBusy?: (busy: boolean) => void } =
   const language = useLanguage()
   const platform = usePlatform()
   const server = useServer()
-  const [state, setState] = createStore<{ busy: boolean; consent: boolean; result?: ProfileImportResult }>({
+  const [state, setState] = createStore<{ busy: boolean; consent: boolean; reset: boolean; result?: ProfileImportResult }>({
     busy: false,
     consent: false,
+    reset: false,
   })
   const ready = () => (state.result?.status === "ready" ? state.result : undefined)
   const local = () => !!platform.profileImport && !!server.current && ServerConnection.builtin(server.current)
@@ -28,7 +29,7 @@ export function ProfileImportPanel(props: { onBusy?: (busy: boolean) => void } =
       })
       .catch(() => undefined)
   })
-  async function run(confirm: boolean, browse = false) {
+  async function run(confirm: boolean, browse = false, reset = false) {
     if (!platform.profileImport || !local() || state.busy || (confirm && !state.consent)) return
     const token = ready()?.token
     if (confirm && !token) return
@@ -37,8 +38,8 @@ export function ProfileImportPanel(props: { onBusy?: (busy: boolean) => void } =
     props.onBusy?.(true)
     try {
       const result =
-        confirm && token ? await platform.profileImport.confirm(token) : await platform.profileImport.preview(browse)
-      if (server.key === key) setState({ result, consent: false })
+        confirm && token ? await platform.profileImport.confirm(token) : await platform.profileImport.preview(browse, reset)
+      if (server.key === key) setState({ result, consent: false, reset: !confirm && reset })
     } catch {
       setState("result", { status: "error", code: "invalid" })
     } finally {
@@ -71,6 +72,14 @@ export function ProfileImportPanel(props: { onBusy?: (busy: boolean) => void } =
           {(error) => (
             <div role="alert">
               <p>{language.t(`profileImport.error.${error().code}`)}</p>
+              <Show when={error().code === "nonempty"}>
+                <div class="flex flex-col gap-2 items-start">
+                  <p class="text-text-weak">{language.t("profileImport.resetHint")}</p>
+                  <Button disabled={state.busy} onClick={() => void run(false, false, true)}>
+                    {language.t("profileImport.reset")}
+                  </Button>
+                </div>
+              </Show>
               <Show when={error().detail}>
                 {(detail) => (
                   <div class="text-text-weak">
@@ -148,7 +157,7 @@ export function ProfileImportPanel(props: { onBusy?: (busy: boolean) => void } =
                 <span>{language.t("profileImport.consent")}</span>
               </label>
               <Button variant="primary" disabled={state.busy || !state.consent} onClick={() => void run(true)}>
-                {language.t("profileImport.confirm")}
+                {state.reset ? language.t("profileImport.resetConfirm") : language.t("profileImport.confirm")}
               </Button>
             </>
           )}

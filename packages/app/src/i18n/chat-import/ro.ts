@@ -67,6 +67,10 @@ export const dict = {
     "Această configurație conține legături nesuportate, alternates de obiecte Git ciclice, fișiere speciale sau depășește limita de import (50 GiB / 500.000 de elemente). Legăturile simbolice externe trebuie materializate înainte de import; fișierele sursă nu au fost modificate.",
   "profileImport.error.space":
     "Nu există suficient spațiu liber pe disc pentru a pregăti această configurație. Eliberați spațiu și reluați previzualizarea.",
+  "profileImport.resetHint":
+    "Reinițializarea șterge profilul Classic actual — conversații, date de autentificare, conturi cloud, setări, permisiuni și spații de lucru — și îl înlocuiește cu configurația importată. Această acțiune nu poate fi anulată.",
+  "profileImport.reset": "Reinițializează Classic și importă tot",
+  "profileImport.resetConfirm": "Șterge Classic și importă tot",
   "chatImport.tab": "Import de conversații",
   "chatImport.title": "Importă conversații din OpenCode",
   "chatImport.description":

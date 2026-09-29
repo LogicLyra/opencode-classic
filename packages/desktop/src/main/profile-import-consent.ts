@@ -11,11 +11,20 @@ const copy = {
   confirm: "Copy trusted setup",
 } as const
 
+const resetCopy = {
+  title: "Reset Classic and import full setup",
+  message: "Erase the current Classic profile and replace it with this setup?",
+  detail:
+    "Everything currently in this Classic profile — chats, credentials, cloud accounts, settings, permissions and workspaces — is permanently deleted before the setup below is copied. This cannot be undone.\n\nReplaces it with: saved provider credentials: {{providers}}. Cloud accounts: {{accounts}}. Configured plugins: {{plugins}}. MCP entries: {{mcp}}. Project commands: {{commands}}. Permission records: {{permissions}}. Pending prompts: {{pending}}. Git checkouts: {{git}}.\n\nImport itself does not run these integrations. After activation, account refresh, dependency installation, plugins, MCP connections and project startup commands can run normally. Pending prompts remain queued until resumed. Copied Git hooks, filters and helpers retain their behavior when you use Git. Close OpenCode and trust the entire source setup before continuing. External project folders stay shared at their original paths.",
+  cancel: "Cancel",
+  confirm: "Erase Classic and import",
+} as const
+
 function format(text: string, params: Record<string, string | number>) {
   return text.replace(/\{\{(\w+)\}\}/g, (_, name: string) => String(params[name] ?? ""))
 }
 
-export function profileImportConsentText(summary: ProfileImportSummary) {
+export function profileImportConsentText(summary: ProfileImportSummary, reset = false) {
   const params: Record<string, string | number> = {
     providers: summary.providers,
     accounts: summary.accounts,
@@ -26,11 +35,12 @@ export function profileImportConsentText(summary: ProfileImportSummary) {
     pending: summary.pending,
     git: summary.git,
   }
+  const source = reset ? resetCopy : copy
   return {
-    title: copy.title,
-    message: copy.message,
-    detail: format(copy.detail, params),
-    cancel: copy.cancel,
-    confirm: copy.confirm,
+    title: source.title,
+    message: source.message,
+    detail: format(source.detail, params),
+    cancel: source.cancel,
+    confirm: source.confirm,
   }
 }

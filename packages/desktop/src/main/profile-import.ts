@@ -11,11 +11,11 @@ import { beginProfileScratch, cleanupProfileScratch } from "./profile-import-scr
 
 export function createDesktopProfileImport() {
   return createProfileImportController({
-    approve: async (sender, summary) => {
+    approve: async (sender, summary, reset) => {
       const contents = webContents.fromId(sender)
       const window = contents && BrowserWindow.fromWebContents(contents)
       if (!contents || contents.isDestroyed() || !window || window.isDestroyed()) return false
-      const text = profileImportConsentText(summary)
+      const text = profileImportConsentText(summary, reset)
       const result = await dialog.showMessageBox(window, {
         type: "warning",
         title: text.title,

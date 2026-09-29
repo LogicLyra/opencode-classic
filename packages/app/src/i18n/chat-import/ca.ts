@@ -67,6 +67,10 @@ export const dict = {
     "Aquesta configuració conté enllaços no admesos, alternates d'objectes del Git cíclics, fitxers especials o supera el límit d'importació (50 GiB / 500.000 elements). Els enllaços simbòlics externs s'han de materialitzar abans de la importació; els fitxers d'origen no s'han modificat.",
   "profileImport.error.space":
     "No hi ha espai lliure al disc suficient per preparar aquesta configuració. Allibereu espai i torneu a fer la previsualització.",
+  "profileImport.resetHint":
+    "El restabliment esborra el perfil actual del Classic — converses, credencials, comptes al núvol, configuració, permisos i espais de treball — i el substitueix per la configuració importada. Això no es pot desfer.",
+  "profileImport.reset": "Restableix el Classic i importa-ho tot",
+  "profileImport.resetConfirm": "Esborra el Classic i importa-ho tot",
   "chatImport.tab": "Importació de converses",
   "chatImport.title": "Importa converses de l'OpenCode",
   "chatImport.description":

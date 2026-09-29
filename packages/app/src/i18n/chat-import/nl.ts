@@ -67,6 +67,10 @@ export const dict = {
     "Deze setup bevat niet-ondersteunde links, cyclische Git-objectalternates, speciale bestanden of overschrijdt de importlimiet (50 GiB / 500.000 items). Externe symlinks moeten vóór de import worden gematerialiseerd; bronbestanden zijn niet gewijzigd.",
   "profileImport.error.space":
     "Er is niet genoeg vrije schijfruimte om deze setup voor te bereiden. Maak schijfruimte vrij en voer de voorbeeldweergave opnieuw uit.",
+  "profileImport.resetHint":
+    "Opnieuw instellen wist het huidige Classic-profiel — chats, inloggegevens, cloudaccounts, instellingen, machtigingen en werkruimten — en vervangt het door de geïmporteerde setup. Dit kan niet ongedaan worden gemaakt.",
+  "profileImport.reset": "Classic opnieuw instellen en alles importeren",
+  "profileImport.resetConfirm": "Classic wissen en alles importeren",
   "chatImport.tab": "Chatimport",
   "chatImport.title": "Chats importeren uit OpenCode",
   "chatImport.description":

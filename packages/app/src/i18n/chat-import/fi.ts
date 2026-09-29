@@ -67,6 +67,10 @@ export const dict = {
     "Tämä asennus sisältää ei-tuettuja linkkejä, syklisiä Git-objektialternates-rakenteita, erikoistiedostoja tai ylittää tuontirajan (50 GiB / 500 000 kohdetta). Ulkoiset symlinkit on materialisoitava ennen tuontia; lähdetiedostoja ei muutettu.",
   "profileImport.error.space":
     "Vapaata levytilaa ei ole riittävästi tämän asennuksen valmisteluun. Vapauta tilaa ja esikatsele uudelleen.",
+  "profileImport.resetHint":
+    "Nollaus poistaa nykyisen Classic-profiilin — keskustelut, kirjautumistiedot, pilvitilit, asetukset, käyttöoikeudet ja työtilat — ja korvaa sen tuodulla asennuksella. Tätä ei voi kumota.",
+  "profileImport.reset": "Nollaa Classic ja tuo kaikki",
+  "profileImport.resetConfirm": "Poista Classic ja tuo kaikki",
   "chatImport.tab": "Keskustelutuonti",
   "chatImport.title": "Tuo keskusteluja OpenCodesta",
   "chatImport.description":

@@ -67,6 +67,10 @@ export const dict = {
     "Bu quraşdırma dəstəklənməyən keçidlər, dövrəvi Git obyekt alternates-ləri, xüsusi fayllar ehtiva edir və ya idxal həddini aşır (50 GiB / 500 000 element). Xarici simvolik keçidlər idxaldan əvvəl maddiləşdirilməlidir; mənbə faylları dəyişdirilmədi.",
   "profileImport.error.space":
     "Bu quraşdırmanı hazırlamaq üçün kifayət qədər boş disk sahəsi yoxdur. Yer açın və yenidən önizləyin.",
+  "profileImport.resetHint":
+    "Sıfırlama cari Classic profilini — söhbətlər, giriş məlumatları, bulud hesabları, parametrlər, icazələr və iş sahələrini — silir və idxal edilən quraşdırma ilə əvəz edir. Bunun geri alınması mümkün deyil.",
+  "profileImport.reset": "Classic-i sıfırla və hər şeyi idxal et",
+  "profileImport.resetConfirm": "Classic-i sil və hər şeyi idxal et",
   "chatImport.tab": "Söhbət idxalı",
   "chatImport.title": "OpenCode-dan söhbətləri idxal et",
   "chatImport.description":

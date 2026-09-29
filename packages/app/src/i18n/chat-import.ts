@@ -69,6 +69,10 @@ export const chatImportEnglish = {
   "profileImport.error.unsupported":
     "This setup contains unsupported links, cyclic Git object alternates, special files or exceeds the import limit (50 GiB / 500,000 entries). External symlinks must be materialized before import; source files were not changed.",
   "profileImport.error.space": "There is not enough free disk space to stage this setup. Free space and preview again.",
+  "profileImport.resetHint":
+    "Reset erases the current Classic profile — chats, credentials, cloud accounts, settings, permissions and workspaces — and replaces it with the imported setup. This cannot be undone.",
+  "profileImport.reset": "Reset Classic and import everything",
+  "profileImport.resetConfirm": "Erase Classic and import everything",
   "chatImport.tab": "Chat import",
   "chatImport.title": "Import chats from OpenCode",
   "chatImport.description":

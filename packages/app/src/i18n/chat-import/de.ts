@@ -67,6 +67,10 @@ export const dict = {
     "Dieses Setup enthält nicht unterstützte Links, zyklische Git-Objekt-Alternates, spezielle Dateien oder überschreitet die Importgrenze (50 GiB / 500.000 Einträge). Externe Symlinks müssen vor dem Import materialisiert werden; Quelldateien wurden nicht geändert.",
   "profileImport.error.space":
     "Es ist nicht genügend freier Speicherplatz vorhanden, um dieses Setup bereitzustellen. Geben Sie Speicherplatz frei und führen Sie die Vorschau erneut aus.",
+  "profileImport.resetHint":
+    "Das Zurücksetzen löscht das aktuelle Classic-Profil — Chats, Zugangsdaten, Cloud-Konten, Einstellungen, Berechtigungen und Arbeitsbereiche — und ersetzt es durch das importierte Setup. Dies kann nicht rückgängig gemacht werden.",
+  "profileImport.reset": "Classic zurücksetzen und alles importieren",
+  "profileImport.resetConfirm": "Classic löschen und alles importieren",
   "chatImport.tab": "Chat-Import",
   "chatImport.title": "Chats aus OpenCode importieren",
   "chatImport.description":

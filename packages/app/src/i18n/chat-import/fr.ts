@@ -67,6 +67,10 @@ export const dict = {
     "Cette installation contient des liens non pris en charge, des alternates d'objets Git cycliques, des fichiers spéciaux ou dépasse la limite d'importation (50 Gio / 500 000 éléments). Les liens symboliques externes doivent être matérialisés avant l'importation ; les fichiers sources n'ont pas été modifiés.",
   "profileImport.error.space":
     "L'espace disque libre est insuffisant pour préparer cette installation. Libérez de l'espace et relancez l'aperçu.",
+  "profileImport.resetHint":
+    "La réinitialisation efface le profil Classic actuel — conversations, identifiants, comptes cloud, paramètres, permissions et espaces de travail — et le remplace par l'installation importée. Cette action est irréversible.",
+  "profileImport.reset": "Réinitialiser Classic et tout importer",
+  "profileImport.resetConfirm": "Effacer Classic et tout importer",
   "chatImport.tab": "Import de conversations",
   "chatImport.title": "Importer des conversations depuis OpenCode",
   "chatImport.description":

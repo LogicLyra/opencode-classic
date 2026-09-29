@@ -67,6 +67,10 @@ export const dict = {
     "Persediaan ini mengandungi pautan yang tidak disokong, alternates objek Git kitaran, fail istimewa, atau melebihi had import (50 GiB / 500,000 item). Pautan simbolik luar mesti dimaterialkan sebelum import; fail sumber tidak diubah.",
   "profileImport.error.space":
     "Tiada cukup ruang cakera kosong untuk menyediakan persediaan ini. Kosongkan ruang dan pratonton semula.",
+  "profileImport.resetHint":
+    "Set semula memadam profil Classic semasa — sembang, maklumat daftar masuk, akaun awan, tetapan, kebenaran dan ruang kerja — dan menggantikannya dengan persediaan yang diimport. Tindakan ini tidak boleh dibuat asal.",
+  "profileImport.reset": "Set semula Classic dan import semuanya",
+  "profileImport.resetConfirm": "Padam Classic dan import semuanya",
   "chatImport.tab": "Import sembang",
   "chatImport.title": "Import sembang daripada OpenCode",
   "chatImport.description":

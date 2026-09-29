@@ -17,7 +17,7 @@ const api: ElectronAPI = {
   },
   profileImport: {
     status: () => ipcRenderer.invoke("profile-import-status"),
-    preview: (browse) => ipcRenderer.invoke("profile-import-preview", browse),
+    preview: (browse, reset) => ipcRenderer.invoke("profile-import-preview", browse, reset),
     confirm: (token) => ipcRenderer.invoke("profile-import-confirm", token),
   },
   killSidecar: () => ipcRenderer.invoke("kill-sidecar"),

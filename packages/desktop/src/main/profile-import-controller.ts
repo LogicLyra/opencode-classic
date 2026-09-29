@@ -16,7 +16,7 @@ export function createProfileImportController(input: {
   destination: () => { database: string; userData: string } | undefined
   select: (browse: boolean) => Promise<ProfileRoots | null>
   run: (input: ProfileImportInput) => Promise<ProfileWorkerResult>
-  approve: (sender: number, summary: ProfileImportSummary) => Promise<boolean>
+  approve: (sender: number, summary: ProfileImportSummary, reset: boolean) => Promise<boolean>
 }) {
   const tokens = new Map<
     number,
@@ -38,15 +38,15 @@ export function createProfileImportController(input: {
     clear(sender: number) {
       tokens.delete(sender)
     },
-    preview(sender: number, browse: unknown) {
+    preview(sender: number, browse: unknown, reset: unknown) {
       return operation(async () => {
         tokens.delete(sender)
         const dest = input.destination()
-        if (!dest || (browse !== undefined && typeof browse !== "boolean"))
+        if (!dest || (browse !== undefined && typeof browse !== "boolean") || reset !== undefined && typeof reset !== "boolean")
           return { status: "error", code: "unavailable" }
         const source = await input.select(browse === true)
         if (!source) return { status: "cancelled" }
-        const request = { source, userData: dest.userData, destination: dest.database }
+        const request = { source, userData: dest.userData, destination: dest.database, reset: reset === true }
         const result = await input.run(request)
         if (result.status === "error") return result
         const token = randomUUID()
@@ -73,7 +73,8 @@ export function createProfileImportController(input: {
           dest.userData !== entry.input.userData
         )
           return { status: "error", code: "changed" }
-        if (!(await input.approve(sender, entry.summary))) return { status: "cancelled" }
+        const reset = entry.input.reset === true
+        if (!(await input.approve(sender, entry.summary, reset))) return { status: "cancelled" }
         const result = await input.run(entry.input)
         return result.status === "error" ? result : { status: "staged" }
       })

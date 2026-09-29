@@ -67,6 +67,10 @@ export const dict = {
     "Ta konfiguracja zawiera nieobsługiwane dowiązania, cykliczne alternates obiektów Gita, pliki specjalne lub przekracza limit importu (50 GiB / 500 000 elementów). Zewnętrzne dowiązania symboliczne muszą zostać zmaterializowane przed importem; pliki źródłowe nie zostały zmienione.",
   "profileImport.error.space":
     "Nie ma wystarczającej wolnej przestrzeni dyskowej, aby przygotować tę konfigurację. Zwolnij miejsce i wykonaj podgląd ponownie.",
+  "profileImport.resetHint":
+    "Resetowanie usuwa bieżący profil Classic — czaty, dane logowania, konta w chmurze, ustawienia, uprawnienia i przestrzenie robocze — i zastępuje go importowaną konfiguracją. Tego nie można cofnąć.",
+  "profileImport.reset": "Zresetuj Classic i zaimportuj wszystko",
+  "profileImport.resetConfirm": "Wyczyść Classic i zaimportuj wszystko",
   "chatImport.tab": "Import czatów",
   "chatImport.title": "Importuj czaty z OpenCode",
   "chatImport.description":

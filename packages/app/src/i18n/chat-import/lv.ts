@@ -67,6 +67,10 @@ export const dict = {
     "Šī konfigurācija satur neatbalstītas saites, cikliskus Git objektu alternates, īpašus failus vai pārsniedz importēšanas ierobežojumu (50 GiB / 500 000 vienumu). Ārējie symlink jāmaterializē pirms importēšanas; avota faili netika mainīti.",
   "profileImport.error.space":
     "Nav pietiekami daudz brīvas diska vietas šīs konfigurācijas sagatavošanai. Atbrīvojiet vietu un veiciet priekšskatījumu atkārtoti.",
+  "profileImport.resetHint":
+    "Atiestatīšana dzēš pašreizējo Classic profilu — tērzēšanas, pierakstīšanās datus, mākoņkontus, iestatījumus, atļaujas un darbtelpas — un aizstāj to ar importēto konfigurāciju. To nevar atsaukt.",
+  "profileImport.reset": "Atiestatīt Classic un importēt visu",
+  "profileImport.resetConfirm": "Dzēst Classic un importēt visu",
   "chatImport.tab": "Tērzēšanas importēšana",
   "chatImport.title": "Importēt tērzēšanas no OpenCode",
   "chatImport.description":

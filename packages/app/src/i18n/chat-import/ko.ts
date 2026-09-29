@@ -67,6 +67,10 @@ export const dict = {
     "이 설정에는 지원되지 않는 링크, 순환 Git 객체 alternates, 특수 파일이 포함되어 있거나 가져오기 제한(50 GiB / 500,000개 항목)을 초과합니다. 외부 심볼릭 링크는 가져오기 전에 실제 파일로 변환되어야 합니다. 원본 파일은 변경되지 않았습니다.",
   "profileImport.error.space":
     "이 설정을 준비할 충분한 여유 디스크 공간이 없습니다. 공간을 확보하고 다시 미리보기하세요.",
+  "profileImport.resetHint":
+    "재설정하면 현재 Classic 프로필(채팅, 로그인 정보, 클라우드 계정, 설정, 권한, 작업 공간)이 삭제되고 가져온 설정으로 대체됩니다. 이 작업은 되돌릴 수 없습니다.",
+  "profileImport.reset": "Classic를 재설정하고 모두 가져오기",
+  "profileImport.resetConfirm": "Classic를 지우고 모두 가져오기",
   "chatImport.tab": "채팅 가져오기",
   "chatImport.title": "OpenCode에서 채팅 가져오기",
   "chatImport.description":

@@ -67,6 +67,10 @@ export const dict = {
     "Þessi uppsetning inniheldur óstudda tengla, hringrétta Git-hlutatengingar, sérstakar skrár eða fer yfir innflutningsmörk (50 GiB / 500.000 atriði). Ytri symlink-ar verða að vera efnurgerðir fyrir innflutning; upprunaskrár voru ekki breyttar.",
   "profileImport.error.space":
     "Það er ekki nóg laust diskpláss til að undirbúa þessa uppsetningu. Frigjörðu pláss og forskoðaðu aftur.",
+  "profileImport.resetHint":
+    "Endurstilling eyðir núverandi Classic-sniði — spjalli, innskráningarauðkennum, skýreikningum, stillingum, heimildum og vinnurýmum — og kemur innfluttu uppsetningunni í staðinn. Þessu er ekki hægt að afturkalla.",
+  "profileImport.reset": "Endurstilltu Classic og flyttu allt inn",
+  "profileImport.resetConfirm": "Eyddu Classic og flyttu allt inn",
   "chatImport.tab": "Spjallinnflutningur",
   "chatImport.title": "Flytja inn spjall úr OpenCode",
   "chatImport.description":

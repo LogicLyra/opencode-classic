@@ -67,6 +67,10 @@ export const dict = {
     "Ova postavka sadrži nepodržane poveznice, cikličke Git alternates objekte, posebne datoteke ili premašuje ograničenje uvoza (50 GiB / 500 000 stavki). Vanjske simboličke poveznice potrebno je materializirati prije uvoza; izvorne datoteke nisu promijenjene.",
   "profileImport.error.space":
     "Nema dovoljno slobodnog prostora na disku za pripremu ove postavke. Oslobodite prostor i ponovno pokrenite pretpregled.",
+  "profileImport.resetHint":
+    "Resetiranje briše trenutni profil Classic — razgovore, podatke za prijavu, račune u oblaku, postavke, dozvole i radne prostore — i zamjenjuje ga uvezenom postavkom. To se ne može poništiti.",
+  "profileImport.reset": "Resetirajte Classic i uvezite sve",
+  "profileImport.resetConfirm": "Izbrišite Classic i uvezite sve",
   "chatImport.tab": "Uvoz razgovora",
   "chatImport.title": "Uvezi razgovore iz OpenCodea",
   "chatImport.description":

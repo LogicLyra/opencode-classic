@@ -77,7 +77,7 @@ export function registerIpcHandlers(deps: Deps) {
     })
   })
   handleTrusted("chat-import-confirm", (event, token: unknown) => chatImport.confirm(event.sender.id, token))
-  handleTrusted("profile-import-preview", (event, browse: unknown) => {
+  handleTrusted("profile-import-preview", (event, browse: unknown, reset: unknown) => {
     const id = event.sender.id
     if (!profileImportWindows.has(id)) {
       profileImportWindows.add(id)
@@ -86,7 +86,7 @@ export function registerIpcHandlers(deps: Deps) {
         profileImportWindows.delete(id)
       })
     }
-    return profileImport.preview(id, browse).then((result) => {
+    return profileImport.preview(id, browse, reset).then((result) => {
       if (event.sender.isDestroyed()) profileImport.clear(id)
       return result
     })

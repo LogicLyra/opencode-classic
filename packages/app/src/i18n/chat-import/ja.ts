@@ -67,6 +67,10 @@ export const dict = {
     "このセットアップには未対応のリンク、循環する Git オブジェクト alternates、特殊ファイルが含まれているか、インポート上限（50 GiB / 500,000 項目）を超えています。外部のシンボリックリンクはインポート前に実体化する必要があります。ソースファイルは変更されていません。",
   "profileImport.error.space":
     "このセットアップをステージングするための空きディスク容量が足りません。容量を解放して再度プレビューしてください。",
+  "profileImport.resetHint":
+    "リセットすると、現在の Classic プロファイル（チャット、ログイン情報、クラウドアカウント、設定、権限、ワークスペース）が削除され、インポートしたセットアップに置き換えられます。この操作は元に戻せません。",
+  "profileImport.reset": "Classic をリセットしてすべてインポート",
+  "profileImport.resetConfirm": "Classic を消去してすべてインポート",
   "chatImport.tab": "チャットのインポート",
   "chatImport.title": "OpenCode からチャットをインポート",
   "chatImport.description":

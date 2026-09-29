@@ -67,6 +67,10 @@ export const dict = {
     "Bu sozlash qoʻllanmaydigan havolalar, tsiklik Git obyekt alternateslari, maxsus fayllar oʻz ichiga oladi yoki import chegarasidan oshadi (50 GiB / 500 000 element). Tashqi symlinklar importdan oldin moddiylashtirilishi kerak; manba fayllari oʻzgartirilmadi.",
   "profileImport.error.space":
     "Bu sozlashni tayyorlash uchun yetarli boʻsh disk joyi yoʻq. Joy boʻshatib yana oldindan koʻring.",
+  "profileImport.resetHint":
+    "Qayta sozlash joriy Classic profilini — chatlar, kirish maʼlumotlari, bulut hisoblari, sozlamalar, ruxsatlar va ish maydonlarini — oʻchiradi va import qilingan sozlash bilan almashtiradi. Buni bekor qilib boʻlmaydi.",
+  "profileImport.reset": "Classic-ni qayta sozlash va hammasini import qilish",
+  "profileImport.resetConfirm": "Classic-ni oʻchirib hammasini import qilish",
   "chatImport.tab": "Chat importi",
   "chatImport.title": "OpenCode-dan chatlarni import qilish",
   "chatImport.description":

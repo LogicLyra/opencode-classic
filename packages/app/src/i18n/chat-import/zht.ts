@@ -67,6 +67,10 @@ export const dict = {
     "此設定包含不受支援的連結、循環的 Git 物件備用、特殊檔案，或超過匯入限制（50 GiB / 500,000 個項目）。外部符號連結必須在匯入前轉換為實體檔案；來源檔案未被變更。",
   "profileImport.error.space":
     "沒有足夠的可用磁碟空間來暫存此設定。請釋放空間後重新預覽。",
+  "profileImport.resetHint":
+    "重置會清除目前的 Classic 設定檔——聊天、登入資訊、雲端帳戶、設定、權限和工作區——並取代為匯入的設定。此操作無法復原。",
+  "profileImport.reset": "重置 Classic 並匯入全部內容",
+  "profileImport.resetConfirm": "清除 Classic 並匯入全部內容",
   "chatImport.tab": "聊天匯入",
   "chatImport.title": "從 OpenCode 匯入聊天",
   "chatImport.description":
