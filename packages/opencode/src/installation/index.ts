@@ -82,7 +82,10 @@ export interface Interface {
   readonly method: () => Effect.Effect<Method>
   readonly latest: () => Effect.Effect<string>
   readonly upgrade: (method: Method, target: string) => Effect.Effect<void, UpgradeFailedError>
+  readonly upgradeMajor: (method: Method) => Effect.Effect<void, UpgradeFailedError>
 }
+
+export const MAJOR_INSTRUCTIONS = "https://opencode.ai/v2/docs"
 
 export class Service extends Context.Service<Service, Interface>()("@opencode/Installation") {}
 
@@ -227,6 +230,30 @@ const layer: Layer.Layer<Service, never, HttpClient.HttpClient | AppProcess.Serv
         yield* text([process.execPath, "--version"])
         return yield* Effect.void
       }),
+      upgradeMajor: Effect.fn("Installation.upgradeMajor")(function* (m: Method) {
+        if (m !== "curl") {
+          return yield* new UpgradeFailedError({
+            stderr: `OpenCode Classic's upgrade --major supports curl installs only. See ${MAJOR_INSTRUCTIONS}`,
+          })
+        }
+        // The V2 installer writes to the same ~/.opencode/bin/opencode path, replacing Classic in place.
+        const response = yield* httpOk
+          .execute(HttpClientRequest.get("https://opencode.ai/v2/install"))
+          .pipe(Effect.mapError(() => new UpgradeFailedError({ stderr: upgradeFailure() })))
+        const body = yield* response.text.pipe(
+          Effect.mapError(() => new UpgradeFailedError({ stderr: upgradeFailure() })),
+        )
+        const shell = yield* upgradeScriptShell()
+        const outcome = yield* appProcess
+          .run(ChildProcess.make(shell, ["-c", body], { extendEnv: true }))
+          .pipe(Effect.mapError(() => new UpgradeFailedError({ stderr: upgradeFailure() })))
+        if (outcome.exitCode !== 0) {
+          return yield* new UpgradeFailedError({
+            stderr: `Upgrade failed for curl (exit code ${outcome.exitCode}). To install OpenCode 2 manually, see ${MAJOR_INSTRUCTIONS}`,
+          })
+        }
+        yield* Effect.logInfo("upgraded major", { method: m })
+      }),
     }
 
     return Service.of(result)
@@ -240,5 +267,7 @@ const { runPromise } = makeRuntime(Service, AppNodeBuilder.build(node))
 export const latest = (...args: Parameters<Interface["latest"]>) => runPromise((s) => s.latest(...args))
 export const method = () => runPromise((s) => s.method())
 export const upgrade = (...args: Parameters<Interface["upgrade"]>) => runPromise((s) => s.upgrade(...args))
+export const upgradeMajor = (...args: Parameters<Interface["upgradeMajor"]>) =>
+  runPromise((s) => s.upgradeMajor(...args))
 
 export * as Installation from "."
