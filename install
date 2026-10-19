@@ -214,7 +214,7 @@ else
             echo -e "${RED}Failed to fetch version information${NC}"
             exit 1
         fi
-        url="https://github.com/anomalyco/opencode/releases/download/v${specific_version}/$filename"
+        url="https://github.com/$REPO/releases/download/v${specific_version}/$filename"
     else
         # Strip leading 'v' if present
         requested_version="${requested_version#v}"
