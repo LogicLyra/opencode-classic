@@ -33,11 +33,6 @@ export function getReleaseType(current: string, latest: string): ReleaseType {
   return "patch"
 }
 
-export function isUpdateAvailable(current: string, latest: string) {
-  if (!semver.valid(current) || !semver.valid(latest)) return false
-  return semver.gt(latest, current)
-}
-
 export const Info = Schema.Struct({
   version: Schema.String,
   latest: Schema.String,
@@ -67,6 +62,14 @@ export class UpgradeFailedError extends Schema.TaggedErrorClass<UpgradeFailedErr
 }
 
 const GitHubRelease = Schema.Struct({ tag_name: Schema.String })
+
+// OpenCode 1 only updates within its own major version. OpenCode 2 is offered separately through
+// upgradeMajor, so sources that already publish 2.x must not be reported as a normal update.
+export function isUpdate(current: string, latest: string) {
+  if (!semver.valid(latest)) return false
+  if (!semver.valid(current)) return semver.major(latest) === 1
+  return semver.major(latest) === semver.major(current) && semver.gt(latest, current)
+}
 
 export function releaseAssetChecksumMatches(checksums: string, name: string, body: string) {
   const expected = checksums
@@ -202,14 +205,20 @@ const layer: Layer.Layer<Service, never, HttpClient.HttpClient | AppProcess.Serv
 
         return "unknown" as Method
       }),
+      // Classic discovers releases from the fork's GitHub Releases; npm/brew/choco discovery does not apply.
+      // Reports the installed version when there is no same-major update, so callers show no update instead of v2.
       latest: Effect.fn("Installation.latest")(function* () {
-        const response = yield* httpOk.execute(
-          HttpClientRequest.get(`https://api.github.com/repos/${RELEASE_REPOSITORY}/releases/latest`).pipe(
-            HttpClientRequest.acceptJson,
-          ),
-        )
-        const data = yield* HttpClientResponse.schemaBodyJson(GitHubRelease)(response)
-        return data.tag_name.replace(/^v/, "")
+        const found = yield* Effect.gen(function* () {
+          const response = yield* httpOk.execute(
+            HttpClientRequest.get(`https://api.github.com/repos/${RELEASE_REPOSITORY}/releases/latest`).pipe(
+              HttpClientRequest.acceptJson,
+            ),
+          )
+          const data = yield* HttpClientResponse.schemaBodyJson(GitHubRelease)(response)
+          return data.tag_name.replace(/^v/, "")
+        }).pipe(Effect.timeout("10 seconds"))
+        if (!isUpdate(InstallationVersion, found)) return InstallationVersion
+        return found
       }, Effect.orDie),
       upgrade: Effect.fn("Installation.upgrade")(function* (m: Method, target: string) {
         if (m !== "curl") {
@@ -218,6 +227,10 @@ const layer: Layer.Layer<Service, never, HttpClient.HttpClient | AppProcess.Serv
           })
         }
         const version = target.replace(/^v/, "")
+        if (semver.valid(version) && semver.major(version) >= 2)
+          return yield* new UpgradeFailedError({
+            stderr: `OpenCode ${version} is OpenCode 2. Upgrade with \`opencode upgrade --major\` or see ${MAJOR_INSTRUCTIONS}`,
+          })
         if (!semver.valid(version)) return yield* new UpgradeFailedError({ stderr: `Invalid version: ${target}` })
         const upgradeResult = yield* upgradeCurl(version)
         if (upgradeResult.code !== 0) return yield* new UpgradeFailedError({ stderr: upgradeFailure(upgradeResult) })

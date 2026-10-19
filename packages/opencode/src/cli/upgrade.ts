@@ -14,7 +14,7 @@ export function shouldNotify(input: {
 }) {
   if (input.autoupdate === false || input.disabled) return false
   if (input.always) return true
-  return Installation.isUpdateAvailable(input.current, input.latest)
+  return Installation.isUpdate(input.current, input.latest)
 }
 
 // Classic fork: returns undefined when checks are disabled, fail, or Classic is already up to date.

@@ -4,9 +4,14 @@ import { shouldNotify } from "../../src/cli/upgrade"
 const base = { autoupdate: undefined, disabled: false, always: false, current: "1.4.0", latest: "1.4.1" }
 
 describe("upgrade check", () => {
-  test("notifies about every newer release, including patches", () => {
+  test("notifies about every newer OpenCode 1 release, including patches", () => {
     expect(shouldNotify(base)).toBe(true)
-    expect(shouldNotify({ ...base, latest: "2.0.0" })).toBe(true)
+    expect(shouldNotify({ ...base, latest: "1.10.0" })).toBe(true)
+  })
+
+  test("does not treat OpenCode 2 or older releases as updates", () => {
+    expect(shouldNotify({ ...base, latest: "2.0.0" })).toBe(false)
+    expect(shouldNotify({ ...base, latest: "1.3.9" })).toBe(false)
   })
 
   test("treats true and notify the same", () => {

@@ -75,6 +75,18 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+requested_version="${requested_version#v}"
+
+# This installer only installs OpenCode 1. OpenCode 1 clients run it with VERSION set when upgrading,
+# so refusing 2.x also keeps older clients from replacing themselves with OpenCode 2 by accident.
+if [[ "$requested_version" =~ ^([0-9]+)\. ]] && [ "${BASH_REMATCH[1]}" -ge 2 ]; then
+    echo -e "${RED}Error: OpenCode ${requested_version} is not an OpenCode 1 release, so this installer can't install it.${NC}"
+    echo -e "${MUTED}To install OpenCode 2, run: ${NC}curl -fsSL https://opencode.ai/v2/install | bash"
+    echo -e "${MUTED}To upgrade an existing OpenCode 1 install, run: ${NC}opencode upgrade --major"
+    echo -e "${MUTED}Docs: https://opencode.ai/v2/docs${NC}"
+    exit 1
+fi
+
 INSTALL_DIR=$HOME/.opencode/bin
 mkdir -p "$INSTALL_DIR"
 
@@ -198,22 +210,21 @@ else
             "https://api.github.com/repos/$REPO/releases/latest" | \
             sed -n 's/.*"tag_name": *"v\([^"]*\)".*/\1/p')
 
-        if [[ $? -ne 0 || -z "$specific_version" ]]; then
+        if [[ -z "$specific_version" ]]; then
             echo -e "${RED}Failed to fetch version information${NC}"
             exit 1
         fi
+        url="https://github.com/anomalyco/opencode/releases/download/v${specific_version}/$filename"
     else
         # Strip leading 'v' if present
         requested_version="${requested_version#v}"
-        release_base="https://github.com/$REPO/releases/download/v${requested_version}"
-        url="$release_base/$filename"
+        url="https://github.com/$REPO/releases/download/v${requested_version}/$filename"
         specific_version=$requested_version
 
-        # Verify the release exists before downloading
-        if ! curl --fail --silent --show-error --head --location \
-            --proto '=https' --proto-redir '=https' \
-            --output /dev/null "$url"; then
-            echo -e "${RED}Error: Release v${requested_version} not found${NC}"
+        # Verify the release asset exists before downloading. A release that is still publishing has none yet.
+        http_status=$(curl -sIL -o /dev/null -w "%{http_code}" "$url" || true)
+        if [ "$http_status" = "404" ]; then
+            echo -e "${RED}Error: Release v${requested_version} not found. If it was just released, try again in a few minutes.${NC}"
             echo -e "${MUTED}Available releases: https://github.com/$REPO/releases${NC}"
             exit 1
         fi

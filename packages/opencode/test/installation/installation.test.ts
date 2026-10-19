@@ -2,18 +2,24 @@ import { describe, expect, test } from "bun:test"
 import { makeGlobalNode } from "@opencode-ai/core/effect/app-node"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { httpClient } from "@opencode-ai/core/effect/app-node-platform"
-import { Effect, Layer, Stream } from "effect"
+import { Effect, Exit, Fiber, Layer, Stream } from "effect"
+import * as TestClock from "effect/testing/TestClock"
 import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/unstable/http"
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process"
 import { Installation } from "../../src/installation"
+import { InstallationVersion } from "@opencode-ai/core/installation/version"
 import { CrossSpawnSpawner } from "@opencode-ai/core/cross-spawn-spawner"
 import { testEffect } from "../lib/effect"
 import { createHash } from "node:crypto"
 
 const encoder = new TextEncoder()
 
-function mockHttpClient(handler: (request: HttpClientRequest.HttpClientRequest) => Response) {
-  const client = HttpClient.make((request) => Effect.succeed(HttpClientResponse.fromWeb(request, handler(request))))
+// A handler that returns undefined never responds.
+function mockHttpClient(handler: (request: HttpClientRequest.HttpClientRequest) => Response | undefined) {
+  const client = HttpClient.make((request) => {
+    const response = handler(request)
+    return response ? Effect.succeed(HttpClientResponse.fromWeb(request, response)) : Effect.never
+  })
   return Layer.succeed(HttpClient.HttpClient, client)
 }
 
@@ -59,7 +65,7 @@ function releaseResponse(request: HttpClientRequest.HttpClientRequest, body = "i
 }
 
 function testLayer(
-  httpHandler: (request: HttpClientRequest.HttpClientRequest) => Response,
+  httpHandler: (request: HttpClientRequest.HttpClientRequest) => Response | undefined,
   spawnHandler?: (cmd: string, args: readonly string[]) => string | { code: number; stdout?: string; stderr?: string },
 ) {
   const spawnerNode = makeGlobalNode({
@@ -74,14 +80,25 @@ function testLayer(
 }
 
 describe("installation", () => {
-  describe("isUpdateAvailable", () => {
-    test("accepts only valid newer versions", () => {
-      expect(Installation.isUpdateAvailable("1.2.3", "1.2.4")).toBe(true)
-      expect(Installation.isUpdateAvailable("1.2.3", "1.3.0")).toBe(true)
-      expect(Installation.isUpdateAvailable("1.2.3", "2.0.0")).toBe(true)
-      expect(Installation.isUpdateAvailable("1.2.3", "1.2.3")).toBe(false)
-      expect(Installation.isUpdateAvailable("1.2.3", "1.2.2")).toBe(false)
-      expect(Installation.isUpdateAvailable("local", "1.2.4")).toBe(false)
+  describe("isUpdate", () => {
+    test("only counts newer releases in the installed major version", () => {
+      expect(Installation.isUpdate("1.19.0", "1.19.1")).toBe(true)
+      expect(Installation.isUpdate("1.19.0", "1.20.0")).toBe(true)
+      expect(Installation.isUpdate("1.19.0", "1.19.0")).toBe(false)
+      expect(Installation.isUpdate("1.19.0", "1.18.35")).toBe(false)
+      expect(Installation.isUpdate("1.19.0", "2.0.0")).toBe(false)
+      expect(Installation.isUpdate("1.9.0", "1.10.0")).toBe(true)
+    })
+
+    test("compares preview builds within their channel", () => {
+      expect(Installation.isUpdate("0.0.0-dev-202610110139", "0.0.0-dev-202610120000")).toBe(true)
+      expect(Installation.isUpdate("0.0.0-dev-202610120000", "0.0.0-dev-202610110139")).toBe(false)
+    })
+
+    test("source builds only accept OpenCode 1 releases", () => {
+      expect(Installation.isUpdate("local", "1.19.0")).toBe(true)
+      expect(Installation.isUpdate("local", "2.0.0")).toBe(false)
+      expect(Installation.isUpdate("1.19.0", "not-a-version")).toBe(false)
     })
   })
 
@@ -90,22 +107,31 @@ describe("installation", () => {
     testEffect(
       testLayer((request) => {
         calls.push(request.url)
-        return jsonResponse({ tag_name: "v1.2.3" })
+        return jsonResponse({ tag_name: "v1.99.99" })
       }),
     ).effect("reads the latest release from the OpenCode Classic repository", () =>
       Effect.gen(function* () {
         const result = yield* Installation.use.latest()
-        expect(result).toBe("1.2.3")
+        expect(result).toBe("1.99.99")
         expect(calls).toEqual(["https://api.github.com/repos/LogicLyra/opencode-classic/releases/latest"])
       }),
     )
 
-    testEffect(testLayer(() => jsonResponse({ tag_name: "v4.0.0-beta.1" }))).effect(
+    testEffect(testLayer(() => jsonResponse({ tag_name: "v1.99.98-beta.1" }))).effect(
       "strips v prefix from GitHub release tag",
       () =>
         Effect.gen(function* () {
           const result = yield* Installation.use.latest()
-          expect(result).toBe("4.0.0-beta.1")
+          expect(result).toBe("1.99.98-beta.1")
+        }),
+    )
+
+    testEffect(testLayer(() => jsonResponse({ tag_name: "v2.5.0" }))).effect(
+      "reports the installed version when the latest release is a different major",
+      () =>
+        Effect.gen(function* () {
+          const result = yield* Installation.use.latest()
+          expect(result).toBe(InstallationVersion)
         }),
     )
   })
@@ -119,7 +145,7 @@ describe("installation", () => {
       ),
     ).effect("returns sanitized typed errors for failed fork installer execution", () =>
       Effect.gen(function* () {
-        const error = yield* Effect.flip(Installation.use.upgrade("curl", "9.9.9"))
+        const error = yield* Effect.flip(Installation.use.upgrade("curl", "1.99.9"))
         expect(error).toBeInstanceOf(Installation.UpgradeFailedError)
         expect(error.stderr).toBe("Upgrade failed for curl (exit code 1).")
         expect(error.message).toBe(error.stderr)
@@ -185,7 +211,7 @@ describe("installation", () => {
       ),
     ).effect("returns sanitized typed errors when the curl install script fails", () =>
       Effect.gen(function* () {
-        const error = yield* Effect.flip(Installation.use.upgrade("curl", "9.9.9"))
+        const error = yield* Effect.flip(Installation.use.upgrade("curl", "1.99.9"))
         expect(error).toBeInstanceOf(Installation.UpgradeFailedError)
         expect(error.stderr).toBe("Upgrade failed for curl (exit code 1).")
         expect(error.message).toBe(error.stderr)
@@ -206,7 +232,7 @@ describe("installation", () => {
       ),
     ).effect("falls back to sh when bash is unavailable during curl upgrade", () =>
       Effect.gen(function* () {
-        yield* Installation.use.upgrade("curl", "9.9.9")
+        yield* Installation.use.upgrade("curl", "1.99.9")
       }),
     )
 
@@ -227,6 +253,23 @@ describe("installation", () => {
         const error = yield* Effect.flip(Installation.use.upgrade("curl", "1.2.3"))
         expect(error.stderr).toBe("Upgrade failed: installer checksum verification failed.")
         expect(checksumCommands).toEqual([])
+      }),
+    )
+
+    const majorCalls: string[] = []
+    testEffect(
+      testLayer(
+        () => jsonResponse({}),
+        (cmd) => {
+          majorCalls.push(cmd)
+          return ""
+        },
+      ),
+    ).effect("refuses OpenCode 2 targets and points to upgrade --major", () =>
+      Effect.gen(function* () {
+        const error = yield* Effect.flip(Installation.use.upgrade("curl", "2.0.30"))
+        expect(error.stderr).toContain("upgrade --major")
+        expect(majorCalls).toEqual([])
       }),
     )
   })
