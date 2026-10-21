@@ -85,10 +85,14 @@ build_and_smoke() {
 
 package_desktop() {
   local dist="$root/packages/desktop/dist"
+  cd "$root/packages/cli"
+  bun run script/build.ts --single --baseline --skip-install
+  test -f "$root/packages/cli/dist/cli-linux-x64-baseline/bin/opencode"
   cd "$root/packages/desktop"
   export OPENCODE_CHANNEL=prod
   export OPENCODE_VERSION="$version"
   export OPENCODE_CLI_DIST="$root/packages/cli/dist"
+  export OPENCODE_CLI_TARGET="x86_64-unknown-linux-gnu"
   bun ./scripts/prepare.ts
   bun run build
   bun x electron-builder --linux --x64 --publish never --config electron-builder.config.ts
@@ -106,11 +110,10 @@ package_desktop() {
   grep -q "repo: opencode-classic" "$dist/linux-unpacked/resources/app-update.yml"
   grep -q "updaterCacheDirName: opencode-classic-desktop-updater" "$dist/linux-unpacked/resources/app-update.yml"
 
-  test -f "$root/packages/cli/dist/opencode-linux-x64.tar.gz"
   cd "$dist"
   : > linux-packages.sha256
   local file
-  for file in opencode-classic-desktop-linux-amd64.deb opencode-classic-desktop-linux-x86_64.rpm latest-linux.yml "$root/packages/cli/dist/opencode-linux-x64.tar.gz"; do
+  for file in opencode-classic-desktop-linux-amd64.deb opencode-classic-desktop-linux-x86_64.rpm latest-linux.yml "$root/packages/cli/dist/cli-linux-x64-baseline/bin/opencode"; do
     read -r hash _ < <(sha256sum "$file")
     printf '%s  %s\n' "$hash" "$(basename "$file")" >> linux-packages.sha256
   done
