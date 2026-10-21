@@ -249,7 +249,7 @@ export function getConfig() {
         appId,
         productName: "OpenCode",
         protocols: { name: "OpenCode", schemes: ["opencode"] },
-        target: ["deb", "rpm"],
+        linux: { ...base.linux, target: ["deb", "rpm"] },
         publish: {
           provider: "github",
           owner: "LogicLyra",
