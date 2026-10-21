@@ -117,14 +117,10 @@ package_desktop() {
 }
 
 environment
+run install install_deps
+run typecheck typecheck
 case "$mode" in
-  quick)
-    run install install_deps
-    run typecheck typecheck
-    ;;
-  full | all)
-    run install install_deps
-    run typecheck typecheck
+  full | package | all)
     run test unit_tests
     run build-smoke build_and_smoke
     ;;
