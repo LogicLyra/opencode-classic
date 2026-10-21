@@ -1,5 +1,5 @@
 {
-  "name": "@opencode/desktop",
+  "name": "opencode-classic-desktop",
   "private": true,
   "version": "2.1.1",
   "type": "module",

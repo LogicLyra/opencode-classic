@@ -74,7 +74,6 @@ const getBase = (appId: string): Configuration => {
 
   return {
     artifactName: "opencode-classic-desktop-${os}-${arch}.${ext}",
-    updaterCacheDirName: "opencode-classic-desktop-updater",
     directories: {
       output: "dist",
       buildResources: "resources",
