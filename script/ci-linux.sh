@@ -115,7 +115,7 @@ package_desktop() {
   local file
   for file in opencode-classic-desktop-linux-amd64.deb opencode-classic-desktop-linux-x86_64.rpm latest-linux.yml "$root/packages/cli/dist/cli-linux-x64-baseline/bin/opencode"; do
     read -r hash _ < <(sha256sum "$file")
-    printf '%s  %s\n' "$hash" "$(basename "$file")" >> linux-packages.sha256
+    printf '%s  %s\n' "$hash" "$file" >> linux-packages.sha256
   done
   sha256sum -c linux-packages.sha256
 }
