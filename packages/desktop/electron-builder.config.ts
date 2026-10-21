@@ -73,7 +73,8 @@ const getBase = (appId: string): Configuration => {
   const target = getCurrentCli()
 
   return {
-    artifactName: "opencode-desktop-${os}-${arch}.${ext}",
+    artifactName: "opencode-classic-desktop-${os}-${arch}.${ext}",
+    updaterCacheDirName: "opencode-classic-desktop-updater",
     directories: {
       output: "dist",
       buildResources: "resources",
@@ -249,9 +250,11 @@ export function getConfig() {
         appId,
         productName: "OpenCode",
         protocols: { name: "OpenCode", schemes: ["opencode"] },
+        target: ["deb", "rpm"],
         publish: {
-          provider: "generic",
-          url: "https://opencode.ai/update/api/latest/desktop/opencode/",
+          provider: "github",
+          owner: "LogicLyra",
+          repo: "opencode-classic",
           channel: "latest",
         },
         deb: { fpm: [metainfoFpm(appId), legacyDesktopEntryFpm] },
