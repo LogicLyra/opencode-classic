@@ -60,6 +60,7 @@ environment() {
 
 install_deps() {
   cd "$root"
+  rm -rf node_modules
   bun install --frozen-lockfile
   bun audit --audit-level=high || printf 'advisory: bun audit findings ignored per PR #9 gate policy\n' >&2
 }
