@@ -52,7 +52,6 @@
     "why-is-node-running": "3.2.2"
   },
   "dependencies": {
-    "@opencode-classic/releases": "workspace:*",
     "@actions/core": "1.11.1",
     "@actions/github": "6.0.1",
     "@agentclientprotocol/sdk": "0.21.0",
@@ -94,6 +93,7 @@
     "@opencode-ai/sdk": "workspace:*",
     "@opencode-ai/server": "workspace:*",
     "@opencode-ai/tui": "workspace:*",
+    "@opencode-classic/releases": "workspace:*",
     "@openrouter/ai-sdk-provider": "2.9.0",
     "@opentelemetry/api": "1.9.0",
     "@opentelemetry/context-async-hooks": "2.6.1",
