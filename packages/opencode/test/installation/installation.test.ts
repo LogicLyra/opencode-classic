@@ -51,7 +51,11 @@ function mockSpawner(
 }
 
 function jsonResponse(body: unknown) {
-  return new Response(JSON.stringify(body), {
+  const data =
+    typeof body === "object" && body !== null && "tag_name" in body
+      ? [{ ...body, draft: false, prerelease: false }]
+      : body
+  return new Response(JSON.stringify(data), {
     status: 200,
     headers: { "content-type": "application/json" },
   })
@@ -113,16 +117,16 @@ describe("installation", () => {
       Effect.gen(function* () {
         const result = yield* Installation.use.latest()
         expect(result).toBe("1.99.99")
-        expect(calls).toEqual(["https://api.github.com/repos/LogicLyra/opencode-classic/releases/latest"])
+        expect(calls).toEqual(["https://api.github.com/repos/LogicLyra/opencode-classic/releases?per_page=100&page=1"])
       }),
     )
 
     testEffect(testLayer(() => jsonResponse({ tag_name: "v1.99.98-beta.1" }))).effect(
-      "strips v prefix from GitHub release tag",
+      "does not promote a prerelease tag into a stable update",
       () =>
         Effect.gen(function* () {
           const result = yield* Installation.use.latest()
-          expect(result).toBe("1.99.98-beta.1")
+          expect(result).toBe(InstallationVersion)
         }),
     )
 
@@ -281,7 +285,8 @@ describe("installation", () => {
       testLayer(
         (request) => {
           curlUrls.push(request.url)
-          return new Response("echo v2", { status: 200 })
+          if (request.url.includes("/releases?")) return jsonResponse({ tag_name: "v2.2.5" })
+          return new Response("", { status: 404 })
         },
         (cmd, args) => {
           curlCalls.push(cmd)
@@ -289,12 +294,13 @@ describe("installation", () => {
           return ""
         },
       ),
-    ).effect("runs the OpenCode 2 install script for curl installs", () =>
+    ).effect("refuses migration before a verified Classic v2 release is ready", () =>
       Effect.gen(function* () {
         curlUrls.length = 0
-        yield* Installation.use.upgradeMajor("curl")
-        expect(curlUrls).toEqual(["https://opencode.ai/v2/install"])
-        expect(curlCalls).toContain("bash")
+        const error = yield* Effect.flip(Installation.use.upgradeMajor("curl"))
+        expect(error.stderr).toContain("not available yet")
+        expect(curlUrls.every((url) => url.includes("LogicLyra/opencode-classic"))).toBe(true)
+        expect(curlCalls).toEqual([])
       }),
     )
 

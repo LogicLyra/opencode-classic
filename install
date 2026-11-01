@@ -81,9 +81,8 @@ requested_version="${requested_version#v}"
 # so refusing 2.x also keeps older clients from replacing themselves with OpenCode 2 by accident.
 if [[ "$requested_version" =~ ^([0-9]+)\. ]] && [ "${BASH_REMATCH[1]}" -ge 2 ]; then
     echo -e "${RED}Error: OpenCode ${requested_version} is not an OpenCode 1 release, so this installer can't install it.${NC}"
-    echo -e "${MUTED}To install OpenCode 2, run: ${NC}curl -fsSL https://opencode.ai/v2/install | bash"
     echo -e "${MUTED}To upgrade an existing OpenCode 1 install, run: ${NC}opencode upgrade --major"
-    echo -e "${MUTED}Docs: https://opencode.ai/v2/docs${NC}"
+    echo -e "${MUTED}Classic migration status: https://github.com/$REPO/blob/main/MIGRATING.md${NC}"
     exit 1
 fi
 
