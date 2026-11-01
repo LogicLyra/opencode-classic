@@ -228,6 +228,8 @@ else
             exit 1
         fi
     fi
+    # Pin payload and checksums together, including explicit VERSION upgrades.
+    release_base="https://github.com/$REPO/releases/download/v${specific_version}"
 fi
 
 print_message() {

@@ -41,8 +41,8 @@ jobs:
         run: |
           test "$GITHUB_SHA" = "$APPROVED_SHA"
           test "$(git rev-parse origin/main)" = "$APPROVED_SHA"
-          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "Version must be a stable SemVer without a leading v"
+          if [[ ! "$VERSION" =~ ^1\.[0-9]+\.[0-9]+$ ]]; then
+            echo "The bridge workflow only releases stable v1 versions"
             exit 1
           fi
 
@@ -51,7 +51,7 @@ jobs:
 
           published=$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" --jq '.[] | select(.draft == false and .prerelease == false) | .tag_name')
           # shellcheck disable=SC2016
-          highest=$(RELEASE_TAGS="$published" bun -e 'import semver from "semver"; const versions = (process.env.RELEASE_TAGS ?? "").split(/\s+/).map((tag) => tag.replace(/^v/, "")).filter((version) => semver.valid(version)); process.stdout.write(versions.sort(semver.rcompare)[0] ?? "")')
+          highest=$(RELEASE_TAGS="$published" bun -e 'import semver from "semver"; const versions = (process.env.RELEASE_TAGS ?? "").split(/\s+/).map((tag) => tag.replace(/^v/, "")).filter((version) => semver.valid(version) && semver.major(version) === 1); process.stdout.write(versions.sort(semver.rcompare)[0] ?? "")')
           if [[ -n "$highest" ]]; then
             # shellcheck disable=SC2016
             HIGHEST="$highest" bun -e 'import semver from "semver"; if (!semver.gt(process.env.VERSION, process.env.HIGHEST)) throw new Error(`${process.env.VERSION} must be newer than ${process.env.HIGHEST}`)'
