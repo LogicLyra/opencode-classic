@@ -1,14 +1,20 @@
 export * as McpTool from "./mcp.js"
 
-import { ToolFailure } from "@opencode/ai"
+import { ToolFailure } from "@opencode/ai/effect"
 import { McpEvent } from "@opencode/schema/mcp-event"
-import { Context, Effect, Fiber, type JsonSchema, Layer, PubSub, Semaphore, Stream } from "effect"
+import { Context, Effect, Fiber, type JsonSchema, Layer, Option, PubSub, Schema, Semaphore, Stream } from "effect"
 import { makeLocationNode } from "@opencode/util/effect/app-node"
+import { extension } from "mime-types"
 import { Bus } from "../bus.js"
 
 import { Mcp } from "../mcp/index.js"
+import { Mime } from "../mime.js"
 import { Permission } from "../permission.js"
 import { Tool } from "../tool.js"
+import { ToolOutput } from "../tool-output.js"
+import { ReadToolFileSystem } from "./read-filesystem.js"
+
+const decodeJson = Schema.decodeUnknownOption(Schema.fromJsonString(Schema.Unknown))
 
 /**
  * Registry namespace and permission action names for MCP tools.
@@ -17,7 +23,10 @@ export const namespace = (server: string) => server.replace(/[^a-zA-Z0-9_-]/g, "
 export const name = (server: string, tool: string) => `${namespace(server)}_${tool.replace(/[^a-zA-Z0-9_-]/g, "_")}`
 
 export interface Interface {
-  /** Wait for the initial MCP tool registration to settle. */
+  /**
+   * Wait for the initial MCP tool registration, give servers still connecting a bounded chance to
+   * finish, then bring the registry up to date without waiting for the debounced reload.
+   */
   readonly flush: Effect.Effect<void>
 }
 
@@ -30,6 +39,7 @@ export const layer = Layer.effect(
     const tools = yield* Tool.Service
     const bus = yield* Bus.Service
     const permission = yield* Permission.Service
+    const toolOutput = yield* ToolOutput.Service
     const lock = Semaphore.makeUnsafe(1)
     let discovered: Mcp.Tool[] = []
 
@@ -83,25 +93,14 @@ export const layer = Layer.effect(
                             .join("\n")
                             .trim() || "MCP tool returned an error",
                       })
-                    const content = result.content.map((part) =>
-                      part.type === "text"
-                        ? { type: "text" as const, text: part.text }
-                        : {
-                            type: "file" as const,
-                            uri: `data:${part.mimeType};base64,${part.data}`,
-                            mime: part.mimeType,
-                          },
-                    )
+                    const content = yield* Effect.forEach(result.content, (part) => toContent(part, toolOutput))
                     const text = content.flatMap((part) => (part.type === "text" ? [part.text] : [])).join("\n")
                     const output = () => {
                       if (result.structured !== undefined) return result.structured
                       if (text === "") return null
                       // Agents assume JSON returned as text is already an object, so parse it when the server declares no schema.
-                      if (tool.outputSchema === undefined && (text.startsWith("{") || text.startsWith("["))) {
-                        try {
-                          return JSON.parse(text)
-                        } catch {}
-                      }
+                      if (tool.outputSchema === undefined && (text.startsWith("{") || text.startsWith("[")))
+                        return Option.getOrElse(decodeJson(text), () => text)
                       return text
                     }
                     return {
@@ -109,11 +108,14 @@ export const layer = Layer.effect(
                       ...(content.length === 0 ? {} : { content }),
                     }
                   }).pipe(
-                    Effect.mapError((error) =>
-                      error instanceof ToolFailure
-                        ? error
-                        : new ToolFailure({ message: `Unable to execute ${name(tool.server, tool.name)}` }),
-                    ),
+                    Effect.mapError((error) => {
+                      if (error instanceof ToolFailure) return error
+                      if (error instanceof Permission.BlockedError)
+                        return new ToolFailure({ message: error.message, error })
+                      if (error instanceof Permission.CorrectedError)
+                        return new ToolFailure({ message: error.feedback, error })
+                      return new ToolFailure({ message: `Unable to execute ${name(tool.server, tool.name)}`, error })
+                    }),
                   ),
               })
             }
@@ -141,12 +143,39 @@ export const layer = Layer.effect(
       Stream.runForEach(() => reconcile),
       Effect.forkScoped({ startImmediately: true }),
     )
-    return Service.of({ flush: Effect.asVoid(Fiber.await(initial)) })
+    return Service.of({
+      flush: Effect.gen(function* () {
+        yield* Fiber.await(initial)
+        yield* mcp.awaitStartup()
+        // Each catalog refresh creates new tool objects, so identity shows whether the registry is behind.
+        const current = yield* mcp.tools()
+        if (current.length !== discovered.length || current.some((tool, index) => tool !== discovered[index]))
+          yield* reconcile
+      }),
+    })
   }),
 )
+
+// Only media the read tool also accepts is sent inline; other types would fail request lowering on every later turn.
+const toContent = Effect.fnUntraced(function* (part: Mcp.ToolResultContent, toolOutput: ToolOutput.Interface) {
+  if (part.type === "text") return { type: "text" as const, text: part.text }
+  const mime = part.mimeType.split(";", 1)[0].trim().toLowerCase()
+  if (ReadToolFileSystem.MEDIA_MIMES.has(mime))
+    return { type: "file" as const, uri: `data:${part.mimeType};base64,${part.data}`, mime: part.mimeType }
+  const bytes = Buffer.from(part.data, "base64")
+  const label = part.uri ?? "content"
+  if (Mime.isTextual(mime))
+    return { type: "text" as const, text: `[Resource ${label} (${part.mimeType})]\n${bytes.toString("utf8")}` }
+  const ext = extension(mime)
+  const file = yield* toolOutput.save(bytes, ext ? `.${ext}` : "")
+  return {
+    type: "text" as const,
+    text: `[Binary resource ${label} (${part.mimeType}, ${bytes.byteLength} bytes) saved to ${file}]`,
+  }
+})
 
 export const node = makeLocationNode({
   service: Service,
   layer,
-  deps: [Tool.node, Mcp.node, Bus.node, Permission.node],
+  deps: [Tool.node, Mcp.node, Bus.node, Permission.node, ToolOutput.node],
 })

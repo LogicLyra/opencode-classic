@@ -1,6 +1,8 @@
 import { Schema } from "effect"
+import { NonNegativeInt } from "@opencode/schema"
 import { Tool } from "@opencode/schema/tool"
-import { ModelID, ProviderID, RouteID } from "./ids.js"
+import { ProviderID, RouteID } from "./ids.js"
+import type { LLMResponse } from "./events.js"
 
 export const ProviderFailureClassification = Schema.Literals(["context-overflow", "payload-too-large"])
 export type ProviderFailureClassification = typeof ProviderFailureClassification.Type
@@ -12,7 +14,7 @@ export class HttpContext extends Schema.Class<HttpContext>("AI.HttpContext")({
 }) {}
 
 export class HttpRateLimitDetails extends Schema.Class<HttpRateLimitDetails>("AI.HttpRateLimitDetails")({
-  retryAfterMs: Schema.optional(Schema.Number),
+  retryAfterMs: Schema.optional(NonNegativeInt),
   limit: Schema.optional(Schema.Record(Schema.String, Schema.String)),
   remaining: Schema.optional(Schema.Record(Schema.String, Schema.String)),
   reset: Schema.optional(Schema.Record(Schema.String, Schema.String)),
@@ -63,13 +65,6 @@ export class ProviderConfigurationError extends Schema.TaggedError<ProviderConfi
   message: Schema.String,
 }) {}
 
-export class NoRouteError extends Schema.TaggedError<NoRouteError>("AI.Error.NoRoute")("NoRoute", {
-  ...ReasonFields,
-  route: RouteID,
-  provider: ProviderID,
-  model: ModelID,
-}) {}
-
 export class AuthenticationError extends Schema.TaggedError<AuthenticationError>("AI.Error.Authentication")(
   "Authentication",
   ReasonFields,
@@ -77,7 +72,7 @@ export class AuthenticationError extends Schema.TaggedError<AuthenticationError>
 
 export class RateLimitError extends Schema.TaggedError<RateLimitError>("AI.Error.RateLimit")("RateLimit", {
   ...ReasonFields,
-  retryAfterMs: Schema.optional(Schema.Number),
+  retryAfterMs: Schema.optional(NonNegativeInt),
   rateLimit: Schema.optional(HttpRateLimitDetails),
 }) {}
 
@@ -85,7 +80,7 @@ export class QuotaExceededError extends Schema.TaggedError<QuotaExceededError>("
   "QuotaExceeded",
   {
     ...ReasonFields,
-    retryAfterMs: Schema.optional(Schema.Number),
+    retryAfterMs: Schema.optional(NonNegativeInt),
   },
 ) {}
 
@@ -98,7 +93,7 @@ export class ProviderInternalError extends Schema.TaggedError<ProviderInternalEr
   "ProviderInternal",
   {
     ...ReasonFields,
-    retryAfterMs: Schema.optional(Schema.Number),
+    retryAfterMs: Schema.optional(NonNegativeInt),
   },
 ) {}
 
@@ -139,13 +134,12 @@ export class UnknownProviderError extends Schema.TaggedError<UnknownProviderErro
 /** A caller-supplied deadline elapsed, such as `Generation.await` polling past its `Poll.timeout`. */
 export class TimeoutError extends Schema.TaggedError<TimeoutError>("AI.Error.Timeout")("Timeout", {
   ...ReasonFields,
-  timeoutMs: Schema.optional(Schema.Number),
+  timeoutMs: Schema.optional(NonNegativeInt),
 }) {}
 
 export const AIErrorReason = Schema.Union([
   InvalidRequestError,
   UnsupportedOperationError,
-  NoRouteError,
   AuthenticationError,
   RateLimitError,
   QuotaExceededError,
@@ -162,11 +156,22 @@ export class AIError extends Schema.TaggedError<AIError>()("AI.Error", {
   reason: AIErrorReason,
 }) {
   override readonly cause = this.reason
+  /** Output that arrived before `generate` (including its `schema` decode) or a `loop` step failed. Not in the schema, so encoding omits it. */
+  readonly partial?: LLMResponse
+
+  constructor(props: Pick<AIError, "reason" | "partial">) {
+    super({ reason: props.reason })
+    this.partial = props.partial
+  }
 
   override get message(): string {
     return this.reason.message
   }
 }
+
+/** Return `error` with `partial` attached, or unchanged when there is no partial output. */
+export const withPartial = (error: AIError, partial: LLMResponse | undefined) =>
+  partial === undefined ? error : new AIError({ reason: error.reason, partial })
 
 /**
  * Failure type for tool execute handlers. Handlers must map their internal
