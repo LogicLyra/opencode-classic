@@ -56,9 +56,19 @@ const require = __cjs_mod__.createRequire(import.meta.url);
 `,
         },
       },
-      externalizeDeps: { include: [nodePtyPkg] },
+      // Workspace release policy exports TypeScript sources; Electron must receive compiled JavaScript.
+      externalizeDeps: { include: [nodePtyPkg], exclude: ["@opencode-classic/releases"] },
     },
     plugins: [
+      {
+        name: "classic:bundle-release-policy",
+        generateBundle(_options, bundle) {
+          for (const chunk of Object.values(bundle)) {
+            if (chunk.type === "chunk" && chunk.imports.includes("@opencode-classic/releases"))
+              throw new Error("Classic release policy must be bundled into the desktop build")
+          }
+        },
+      },
       {
         name: "opencode:node-pty-narrower",
         enforce: "pre",
