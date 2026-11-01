@@ -55,7 +55,10 @@ const runtime = Layer.effect(
     }
 
     const emitDeepLinks = (input: string[]) => {
-      const urls = input.map(normalizeDesktopDeepLink)
+      const urls = input.flatMap((url) => {
+        const normalized = normalizeDesktopDeepLink(url)
+        return normalized ? [normalized] : []
+      })
       if (!urls.length) return
       pendingDeepLinks.push(...urls)
 
