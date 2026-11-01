@@ -77,6 +77,10 @@ dependencies() {
 
 focused() {
   (
+    cd "$root/packages/classic-release"
+    bun test
+  )
+  (
     cd "$root/packages/desktop"
     bun test \
       electron-builder.config.test.ts \
@@ -84,6 +88,8 @@ focused() {
       src/main/renderer-security.test.ts \
       src/main/sidecar-env.test.ts \
       src/main/store-name.test.ts \
+      src/main/classic-update.test.ts \
+      src/main/updater-controller.test.ts \
       src/renderer/html.test.ts
   )
   (

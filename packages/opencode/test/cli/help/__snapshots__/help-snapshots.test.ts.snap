@@ -185,7 +185,7 @@ Options:
       --pure        run without external plugins                                           [boolean]
   -m, --method      installation method to use (OpenCode Classic releases use curl)
                                                                           [string] [choices: "curl"]
-      --major       upgrade to OpenCode 2 and remove OpenCode 1                            [boolean]"
+      --major       upgrade to a migration-ready OpenCode Classic v2 release               [boolean]"
 `;
 
 exports[`opencode CLI help-text snapshots every documented command emits stable help text: opencode uninstall --help 1`] = `

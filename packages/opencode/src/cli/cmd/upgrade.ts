@@ -20,7 +20,7 @@ export const UpgradeCommand = {
         choices: ["curl"],
       })
       .option("major", {
-        describe: "upgrade to OpenCode 2 and remove OpenCode 1",
+        describe: "upgrade to a migration-ready OpenCode Classic v2 release",
         type: "boolean",
       })
   },
@@ -58,22 +58,16 @@ export const UpgradeCommand = {
       return
     }
 
-    const target = args.target
-      ? args.target.replace(/^v/, "")
-      : await Installation.latest().catch(() => undefined)
+    const target = args.target ? args.target.replace(/^v/, "") : await Installation.latest().catch(() => undefined)
     if (!target) {
       prompts.log.error("Couldn't check for updates")
       prompts.outro("Done")
       return
     }
 
-    if (
-      InstallationVersion === target ||
-      (!args.target && !Installation.isUpdate(InstallationVersion, target))
-    ) {
+    if (InstallationVersion === target || (!args.target && !Installation.isUpdate(InstallationVersion, target))) {
       const reason = InstallationVersion === target ? "is already installed" : "is not newer than the installed version"
       prompts.log.warn(`opencode upgrade skipped: ${target} ${reason}`)
-      prompts.log.info("OpenCode 2 is available. Upgrade with `opencode upgrade --major`")
       prompts.outro("Done")
       return
     }
@@ -91,7 +85,6 @@ export const UpgradeCommand = {
       return
     }
     spinner.stop("Upgrade complete")
-    prompts.log.info("OpenCode 2 is available. Upgrade with `opencode upgrade --major`")
     prompts.outro("Done")
   },
 }

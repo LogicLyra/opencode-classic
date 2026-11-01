@@ -3,35 +3,22 @@ import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { httpClient } from "@opencode-ai/core/effect/app-node-platform"
 import { Effect, Layer, Schema, Context, Stream } from "effect"
 import { serviceUse } from "@opencode-ai/core/effect/service-use"
-import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/unstable/http"
+import { HttpClient, HttpClientRequest } from "effect/unstable/http"
 import { withTransientReadRetry } from "@/util/effect-http-client"
 import { ChildProcess } from "effect/unstable/process"
 import { AppProcess } from "@opencode-ai/core/process"
 import path from "path"
 import { makeRuntime } from "@opencode-ai/core/effect/runtime"
 import semver from "semver"
-import { createHash } from "node:crypto"
+import { checksumMatches, createReleaseClient, instructions } from "@opencode-classic/releases"
 import { InstallationChannel, InstallationVersion } from "@opencode-ai/core/installation/version"
 import { InstallationEvent } from "@opencode-ai/schema/installation-event"
 
 export type Method = "curl" | "npm" | "yarn" | "pnpm" | "bun" | "brew" | "scoop" | "choco" | "unknown"
 
-export type ReleaseType = "patch" | "minor" | "major"
-
 export const Event = InstallationEvent
 
 const RELEASE_REPOSITORY = "LogicLyra/opencode-classic"
-
-export function getReleaseType(current: string, latest: string): ReleaseType {
-  const currMajor = semver.major(current)
-  const currMinor = semver.minor(current)
-  const newMajor = semver.major(latest)
-  const newMinor = semver.minor(latest)
-
-  if (newMajor > currMajor) return "major"
-  if (newMinor > currMinor) return "minor"
-  return "patch"
-}
 
 export const Info = Schema.Struct({
   version: Schema.String,
@@ -45,10 +32,6 @@ export function userAgent(client = "cli") {
 
 export const USER_AGENT = userAgent()
 
-export function isPreview() {
-  return InstallationChannel !== "latest"
-}
-
 export function isLocal() {
   return InstallationChannel === "local"
 }
@@ -61,8 +44,6 @@ export class UpgradeFailedError extends Schema.TaggedErrorClass<UpgradeFailedErr
   }
 }
 
-const GitHubRelease = Schema.Struct({ tag_name: Schema.String })
-
 // OpenCode 1 only updates within its own major version. OpenCode 2 is offered separately through
 // upgradeMajor, so sources that already publish 2.x must not be reported as a normal update.
 export function isUpdate(current: string, latest: string) {
@@ -72,12 +53,7 @@ export function isUpdate(current: string, latest: string) {
 }
 
 export function releaseAssetChecksumMatches(checksums: string, name: string, body: string) {
-  const expected = checksums
-    .split(/\r?\n/)
-    .map((line) => line.trim().split(/\s+/, 2))
-    .find((entry) => entry[1]?.replace(/^\*/, "") === name)?.[0]
-  if (!expected || !/^[a-f0-9]{64}$/i.test(expected)) return false
-  return createHash("sha256").update(body).digest("hex").toLowerCase() === expected.toLowerCase()
+  return checksumMatches(checksums, name, body)
 }
 
 export interface Interface {
@@ -88,7 +64,7 @@ export interface Interface {
   readonly upgradeMajor: (method: Method) => Effect.Effect<void, UpgradeFailedError>
 }
 
-export const MAJOR_INSTRUCTIONS = "https://opencode.ai/v2/docs"
+export const MAJOR_INSTRUCTIONS = instructions
 
 export class Service extends Context.Service<Service, Interface>()("@opencode/Installation") {}
 
@@ -100,6 +76,15 @@ const layer: Layer.Layer<Service, never, HttpClient.HttpClient | AppProcess.Serv
     const http = yield* HttpClient.HttpClient
     const httpOk = HttpClient.filterStatusOk(withTransientReadRetry(http))
     const appProcess = yield* AppProcess.Service
+    const context = yield* Effect.context<never>()
+    const releases = createReleaseClient((url) =>
+      Effect.runPromiseWith(context)(
+        Effect.gen(function* () {
+          const response = yield* http.execute(HttpClientRequest.get(url))
+          return { status: response.status, body: yield* response.text }
+        }).pipe(Effect.timeout("10 seconds")),
+      ),
+    )
 
     const text = Effect.fnUntraced(
       function* (cmd: string[], opts?: { cwd?: string; env?: Record<string, string> }) {
@@ -205,20 +190,11 @@ const layer: Layer.Layer<Service, never, HttpClient.HttpClient | AppProcess.Serv
 
         return "unknown" as Method
       }),
-      // Classic discovers releases from the fork's GitHub Releases; npm/brew/choco discovery does not apply.
-      // Reports the installed version when there is no same-major update, so callers show no update instead of v2.
+      // The release list keeps v1 updates discoverable even while v2 coexists as non-Latest.
       latest: Effect.fn("Installation.latest")(function* () {
-        const found = yield* Effect.gen(function* () {
-          const response = yield* httpOk.execute(
-            HttpClientRequest.get(`https://api.github.com/repos/${RELEASE_REPOSITORY}/releases/latest`).pipe(
-              HttpClientRequest.acceptJson,
-            ),
-          )
-          const data = yield* HttpClientResponse.schemaBodyJson(GitHubRelease)(response)
-          return data.tag_name.replace(/^v/, "")
-        }).pipe(Effect.timeout("10 seconds"))
-        if (!isUpdate(InstallationVersion, found)) return InstallationVersion
-        return found
+        const current = semver.valid(InstallationVersion) ? InstallationVersion : "1.0.0"
+        const found = yield* Effect.tryPromise(() => releases.update(current))
+        return found === current ? InstallationVersion : found
       }, Effect.orDie),
       upgrade: Effect.fn("Installation.upgrade")(function* (m: Method, target: string) {
         if (m !== "curl") {
@@ -249,23 +225,21 @@ const layer: Layer.Layer<Service, never, HttpClient.HttpClient | AppProcess.Serv
             stderr: `OpenCode Classic's upgrade --major supports curl installs only. See ${MAJOR_INSTRUCTIONS}`,
           })
         }
-        // The V2 installer writes to the same ~/.opencode/bin/opencode path, replacing Classic in place.
-        const response = yield* httpOk
-          .execute(HttpClientRequest.get("https://opencode.ai/v2/install"))
-          .pipe(Effect.mapError(() => new UpgradeFailedError({ stderr: upgradeFailure() })))
-        const body = yield* response.text.pipe(
-          Effect.mapError(() => new UpgradeFailedError({ stderr: upgradeFailure() })),
+        const target = yield* Effect.tryPromise(() => releases.update(InstallationVersion, true)).pipe(
+          Effect.mapError(() => new UpgradeFailedError({ stderr: "Could not verify a Classic migration release." })),
         )
-        const shell = yield* upgradeScriptShell()
-        const outcome = yield* appProcess
-          .run(ChildProcess.make(shell, ["-c", body], { extendEnv: true }))
-          .pipe(Effect.mapError(() => new UpgradeFailedError({ stderr: upgradeFailure() })))
-        if (outcome.exitCode !== 0) {
+        if (
+          !semver.valid(target) ||
+          !semver.valid(InstallationVersion) ||
+          semver.major(target) !== semver.major(InstallationVersion) + 1
+        ) {
           return yield* new UpgradeFailedError({
-            stderr: `Upgrade failed for curl (exit code ${outcome.exitCode}). To install OpenCode 2 manually, see ${MAJOR_INSTRUCTIONS}`,
+            stderr: `A migration-ready OpenCode Classic v2 release is not available yet. Continue using Classic v1. See ${MAJOR_INSTRUCTIONS}`,
           })
         }
-        yield* Effect.logInfo("upgraded major", { method: m })
+        const outcome = yield* upgradeCurl(target)
+        if (outcome.code !== 0) return yield* new UpgradeFailedError({ stderr: upgradeFailure(outcome) })
+        yield* Effect.logInfo("upgraded major", { method: m, target })
       }),
     }
 
