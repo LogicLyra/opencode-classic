@@ -39,7 +39,7 @@ test("minifies only builds, previews onboarding only in development, and ships s
       process.env.OPENCODE_TARGET = item.target
       const main = (await load("build")).config.main
       expect(main?.build?.externalizeDeps).toEqual({
-        exclude: bundled,
+        exclude: [...bundled, "@opencode-classic/releases"],
         include: [nodePtyPackage(item.target)],
       })
     }
@@ -107,6 +107,8 @@ test("bundles one Effect runtime and Drizzle while keeping native dependencies e
     expect(chunks.every((chunk) => !chunk.fileName.includes("/"))).toBe(true)
     const imports = chunks.flatMap((chunk) => [...chunk.imports, ...chunk.dynamicImports])
     const modules = chunks.flatMap((chunk) => Object.keys(chunk.modules))
+    expect(imports).not.toContain("@opencode-classic/releases")
+    expect(modules.some((id) => id.endsWith("/packages/classic-release/src/index.ts"))).toBe(true)
 
     for (const name of bundled) {
       expect(imports.filter((id) => id === name || id.startsWith(`${name}/`))).toEqual([])
