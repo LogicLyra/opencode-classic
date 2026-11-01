@@ -228,6 +228,10 @@ else
             exit 1
         fi
     fi
+    if [[ ! "$specific_version" =~ ^1\.[0-9]+\.[0-9]+$ ]]; then
+        echo -e "${RED}Error: this installer requires a stable Classic v1 release.${NC}" >&2
+        exit 1
+    fi
     # Pin payload and checksums together, including explicit VERSION upgrades.
     release_base="https://github.com/$REPO/releases/download/v${specific_version}"
 fi
