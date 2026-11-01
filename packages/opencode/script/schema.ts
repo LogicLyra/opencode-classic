@@ -1,9 +1,11 @@
 #!/usr/bin/env bun
 
-import { Config } from "@/config/config"
+import "@opentui/solid/preload"
 import { ConfigV1 } from "@opencode-ai/core/v1/config/config"
-import { TuiConfig } from "@opencode-ai/tui/config"
 import { Schema } from "effect"
+
+// This generator also runs from the console workspace, outside opencode's bunfig preload.
+const { TuiConfig } = await import("@opencode-ai/tui/config")
 
 type JsonSchema = Record<string, unknown>
 const MODEL_REF = "https://models.dev/model-schema.json#/$defs/Model"
