@@ -8,6 +8,7 @@ import { Effect, FileSystem, Layer, PlatformError, Stream } from "effect"
 import { ChildProcessSpawner } from "effect/process"
 import { existsSync, readdirSync, readFileSync } from "node:fs"
 import path from "node:path"
+import { createHash } from "node:crypto"
 import { Updater } from "../src/services/updater"
 import { testEffect } from "../../core/test/lib/effect"
 
@@ -26,7 +27,10 @@ function fixture(
   failCleanup = false,
   releasePackage = name,
   formula?: string,
-  executableOverride?: (root: string, home: string) => Effect.Effect<string, PlatformError.PlatformError, FileSystem.FileSystem>,
+  executableOverride?: (
+    root: string,
+    home: string,
+  ) => Effect.Effect<string, PlatformError.PlatformError, FileSystem.FileSystem>,
 ) {
   return Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem
@@ -55,8 +59,14 @@ function fixture(
             async (input: string | URL | Request) => {
               const url = input instanceof Request ? input.url : input.toString()
               requests.push(url)
-              if (new URL(url).hostname === "formulae.brew.sh") return Response.json({ versions: { stable: "2.0.21" } })
-              return Response.json({ version: "2.3.4", metadata: { package: releasePackage } })
+              if (url.includes("/releases?"))
+                return Response.json([{ tag_name: "v2.3.4", draft: false, prerelease: false }])
+              if (url.endsWith("/SHA256SUMS"))
+                return new Response(
+                  `${releasePackage === "corrupt" ? "0".repeat(64) : createHash("sha256").update("echo classic").digest("hex")}  install\n`,
+                )
+              if (releasePackage === "missing") return new Response("", { status: 404 })
+              return new Response("echo classic")
             },
             { preconnect: fetch.preconnect },
           ),
@@ -141,31 +151,26 @@ function fixture(
 const windows = process.platform === "win32" ? it.live : it.live.skip
 const unix = process.platform === "win32" ? it.live.skip : it.live
 
-const installs = [
-  { method: "npm", command: ["npm", "install", "--global", "--force", "@opencode/cli@2.3.4-beta.1"] },
-  {
-    method: "pnpm",
-    command: ["pnpm", "add", "--global", "--allow-build=@opencode/cli", "@opencode/cli@2.3.4-beta.1"],
-  },
-  { method: "yarn", command: ["yarn", "global", "add", "@opencode/cli@2.3.4-beta.1"] },
-  { method: "vp", command: ["vp", "update", "-g", "@opencode/cli@2.3.4-beta.1"] },
-] as const
+const installs = ["npm", "pnpm", "yarn", "vp", "bun", "brew", "winget"] as const
 
-installs.forEach(({ method, command }) => {
-  it.live(`${method} installs the explicit V2 package version without a leading v`, () =>
+installs.forEach((method) => {
+  it.live(`${method} cannot replace Classic with an upstream package`, () =>
     Effect.gen(function* () {
       const test = yield* fixture()
-      yield* test.updater.upgrade(method, "v2.3.4-beta.1")
-      expect(test.commands).toEqual([[...command]])
+      const error = yield* test.updater.upgrade(method, "v2.3.4").pipe(Effect.flip)
+      expect(error.message).toContain("Unsupported Classic update method")
+      expect(test.commands).toEqual([])
+      expect(test.requests).toEqual([])
     }),
   )
 })
 
-it.live("vp force-installs a renamed V2 package that replaces the existing binary owner", () =>
+it.live("a renamed upstream package cannot bypass the Classic update route", () =>
   Effect.gen(function* () {
     const test = yield* fixture(() => ({}), "@opencode/cli", false, "@opencode/cli-node")
-    yield* test.updater.upgrade("vp", "v2.3.4-beta.1")
-    expect(test.commands).toEqual([["vp", "install", "-g", "--force", "@opencode/cli-node@2.3.4-beta.1"]])
+    const error = yield* test.updater.upgrade("vp", "v2.3.4").pipe(Effect.flip)
+    expect(error.message).toContain("Unsupported Classic update method")
+    expect(test.commands).toEqual([])
   }),
 )
 
@@ -179,59 +184,36 @@ it.live("vp removes the package from its managed global store", () =>
     expect(test.commands).toEqual([["vp", "uninstall", "-g", "@opencode/cli"]])
   }),
 )
-;[0, 1].forEach((exitCode) => {
-  it.live(`bun isolates and removes its install cache after exit ${exitCode}`, () =>
-    Effect.gen(function* () {
-      const test = yield* fixture((command) => {
-        expect(command.command).toBe("bun")
-        expect(existsSync(command.args[4])).toBe(true)
-        return { exitCode, stderr: Buffer.from("bun install failed") }
-      })
-      const result = yield* test.updater.upgrade("bun", "v2.3.4-beta.1").pipe(Effect.flip, Effect.option)
-      const cache = test.commands[0]?.[5]
-      expect(cache).toStartWith(path.join(test.global.cache, "update-"))
-      expect(test.commands).toEqual([
-        ["bun", "install", "--global", "--trust", "--cache-dir", cache, "@opencode/cli@2.3.4-beta.1"],
-      ])
-      expect(yield* test.fs.readDirectory(test.global.cache)).toEqual([])
-      expect(result._tag).toBe(exitCode === 0 ? "None" : "Some")
-      if (result._tag === "Some") expect(result.value.message).toBe("bun install failed")
-    }),
-  )
-})
-
-it.live("bun ignores install cache cleanup failures", () =>
+it.live("Classic ignores install cache cleanup failures after a successful verified install", () =>
   Effect.gen(function* () {
     const test = yield* fixture(() => ({}), "@opencode/cli", true)
-    yield* test.updater.upgrade("bun", "v2.3.4-beta.1")
+    yield* test.updater.upgrade("curl", "v2.3.4")
     expect(test.commands).toHaveLength(1)
   }),
 )
-;["success", "download", "install"].forEach((failure) => {
-  it.live(`curl uses the V2 installer and cleans its directory: ${failure}`, () =>
+;["success", "install"].forEach((failure) => {
+  it.live(`curl uses a verified Classic installer and cleans its directory: ${failure}`, () =>
     Effect.gen(function* () {
       const test = yield* fixture((command) => {
-        const installer = command.command === "curl" ? command.args[2] : command.args[0]
+        const installer = command.args[0]
         expect(existsSync(path.dirname(installer))).toBe(true)
+        expect(readFileSync(installer, "utf8")).toBe("echo classic")
         return {
-          exitCode:
-            path.basename(command.command, ".exe") ===
-            (failure === "download" ? "curl" : failure === "install" ? "bash" : "")
-              ? 1
-              : 0,
+          exitCode: path.basename(command.command, ".exe") === (failure === "install" ? "bash" : "") ? 1 : 0,
           stderr: Buffer.from(`${failure} failed`),
         }
       })
-      const result = yield* test.updater.upgrade("curl", "v2.3.4-beta.1").pipe(Effect.flip, Effect.option)
-      const installer = test.commands[0]?.[3]
-      expect(installer).toStartWith(path.join(test.global.cache, "update-"))
-      expect(test.commands).toEqual([
-        ["curl", "-fsSL", "-o", installer, "https://opencode.ai/v2/install"],
-        ...(failure === "download" ? [] : [[test.bash, installer, "--version", "2.3.4-beta.1", "--no-modify-path"]]),
+      const result = yield* test.updater.upgrade("curl", "v2.3.4").pipe(Effect.flip, Effect.option)
+      const installer = test.commands[0]?.[1]
+      expect(installer).toStartWith(path.join(test.global.cache, "classic-update-"))
+      expect(test.commands).toEqual([[test.bash, installer, "--version", "2.3.4", "--no-modify-path"]])
+      expect(test.requests).toEqual([
+        "https://github.com/LogicLyra/opencode-classic/releases/download/v2.3.4/install",
+        "https://github.com/LogicLyra/opencode-classic/releases/download/v2.3.4/SHA256SUMS",
       ])
       expect(yield* test.fs.readDirectory(test.global.cache)).toEqual([])
       expect(result._tag).toBe(failure === "success" ? "None" : "Some")
-      if (result._tag === "Some") expect(result.value.message).toBe(`${failure} failed`)
+      if (result._tag === "Some") expect(result.value.message).toBe("Classic installer failed (exit code 1).")
     }),
   )
 })
@@ -241,7 +223,19 @@ it.live("invalid version targets never execute a command or create a cache", () 
     const test = yield* fixture()
     yield* Effect.forEach(Updater.methods, (method) =>
       Effect.forEach(
-        ["", "latest", "2.3", "01.2.3", "vv2.3.4", "2.3.4; echo unsafe", "--global", "v2.3.4\n--force"],
+        [
+          "",
+          "latest",
+          "2.3",
+          "01.2.3",
+          "vv2.3.4",
+          "2.3.4; echo unsafe",
+          "--global",
+          "v2.3.4\n--force",
+          "3.0.0",
+          "1.19.5",
+          "2.3.4-beta.1",
+        ],
         (version) =>
           Effect.gen(function* () {
             const error = yield* test.updater.upgrade(method, version).pipe(Effect.flip)
@@ -253,15 +247,25 @@ it.live("invalid version targets never execute a command or create a cache", () 
     expect(yield* test.fs.exists(test.global.cache)).toBe(false)
   }),
 )
+;["corrupt", "missing"].forEach((failure) => {
+  it.live(`a ${failure} Classic installer cannot execute a shell`, () =>
+    Effect.gen(function* () {
+      const test = yield* fixture(() => ({}), "@opencode/cli", false, failure)
+      const error = yield* test.updater.upgrade("curl", "2.3.4").pipe(Effect.flip)
+      expect(error.message).toContain("checksum verification failed or the release could not be downloaded")
+      expect(test.commands).toEqual([])
+    }),
+  )
+})
 
-it.live("install failures expose stderr and process errors do not report success", () =>
+it.live("install failures are sanitized and process errors do not report success", () =>
   Effect.gen(function* () {
     const failed = yield* fixture(() => ({ exitCode: 1, stderr: Buffer.from("  registry denied access\n") }))
-    const error = yield* failed.updater.upgrade("npm", "2.3.4").pipe(Effect.flip)
-    expect(error.message).toBe("registry denied access")
+    const error = yield* failed.updater.upgrade("curl", "2.3.4").pipe(Effect.flip)
+    expect(error.message).toBe("Classic installer failed (exit code 1).")
     const missing = yield* fixture(() => ({ error: new AppProcess.AppProcessError({ command: "npm" }) }))
-    const unavailable = yield* missing.updater.upgrade("npm", "2.3.4").pipe(Effect.flip)
-    expect(unavailable.message).toBe("Failed to update with npm")
+    const unavailable = yield* missing.updater.upgrade("curl", "2.3.4").pipe(Effect.flip)
+    expect(unavailable.message).toBe("Could not install the Classic release.")
     expect(failed.commands).toHaveLength(1)
     expect(missing.commands).toHaveLength(1)
   }),
@@ -313,33 +317,30 @@ it.live("vp detection ignores no-match output that repeats the package name", ()
   }),
 )
 
-it.live("Homebrew Core installs check and upgrade the Core formula", () =>
+it.live("Homebrew ownership is detected but cannot route Classic updates to Core", () =>
   Effect.gen(function* () {
     const test = yield* fixture(() => ({}), "@opencode/cli", false, "anomalyco/tap/opencode-v2", "opencode")
     expect(yield* test.updater.method()).toBe("brew")
-    expect(yield* test.updater.latest()).toBe("2.0.21")
-    yield* test.updater.upgrade("brew", "2.0.21")
-    expect(test.commands).toEqual([["brew", "upgrade", "opencode"]])
-    // An explicitly selected method keeps its own release source.
-    expect(yield* test.updater.latest("npm")).toBe("2.3.4")
-    expect(test.requests).toEqual([
-      "https://formulae.brew.sh/api/formula/opencode.json",
-      "https://opencode.ai/update/api/local/cli/npm?current=local",
-    ])
+    expect((yield* test.updater.latest("brew").pipe(Effect.flip)).message).toContain(
+      "Unsupported Classic update method",
+    )
+    expect((yield* test.updater.upgrade("brew", "2.0.21").pipe(Effect.flip)).message).toContain(
+      "Unsupported Classic update method",
+    )
+    expect(test.commands).toEqual([])
+    expect(test.requests).toEqual([])
   }),
 )
 ;["opencode-v2", "opencode-beta"].forEach((formula) => {
-  it.live(`Homebrew tap installs of ${formula} use the published tap formula`, () =>
+  it.live(`Homebrew tap installs of ${formula} cannot replace Classic`, () =>
     Effect.gen(function* () {
       const test = yield* fixture(() => ({}), "@opencode/cli", false, `anomalyco/tap/${formula}`, formula)
       expect(yield* test.updater.method()).toBe("brew")
-      expect(yield* test.updater.latest()).toBe("2.3.4")
-      yield* test.updater.upgrade("brew", "2.3.4")
-      expect(test.commands).toEqual([["brew", "upgrade", `anomalyco/tap/${formula}`]])
-      expect(test.requests).toEqual([
-        "https://opencode.ai/update/api/local/cli/homebrew?current=local",
-        "https://opencode.ai/update/api/local/cli/homebrew?current=local",
-      ])
+      expect((yield* test.updater.upgrade("brew", "2.3.4").pipe(Effect.flip)).message).toContain(
+        "Unsupported Classic update method",
+      )
+      expect(test.commands).toEqual([])
+      expect(test.requests).toEqual([])
     }),
   )
 })
@@ -375,7 +376,7 @@ const wingetArgs = [
   "--disable-interactivity",
 ]
 
-it.live("WinGet installs check, upgrade, and remove the version in the WinGet index", () =>
+it.live("WinGet keeps uninstall ownership but cannot check or install upstream updates", () =>
   Effect.gen(function* () {
     const test = yield* winget({
       stdout: Buffer.from(
@@ -383,29 +384,30 @@ it.live("WinGet installs check, upgrade, and remove the version in the WinGet in
       ),
     })
     expect(yield* test.updater.method()).toBe("winget")
-    expect(yield* test.updater.latest()).toBe("2.0.28")
-    yield* test.updater.upgrade("winget", "v2.0.28")
+    expect((yield* test.updater.latest("winget").pipe(Effect.flip)).message).toContain(
+      "Unsupported Classic update method",
+    )
+    expect((yield* test.updater.upgrade("winget", "v2.0.28").pipe(Effect.flip)).message).toContain(
+      "Unsupported Classic update method",
+    )
     const removal = test.updater.removal("winget")
     if (!removal) return yield* Effect.die("Expected winget removal command")
     yield* removal.run
-    expect(test.commands).toEqual([
-      ["winget", "search", ...wingetArgs],
-      ["winget", "upgrade", ...wingetArgs, "--version", "2.0.28", "--silent", "--accept-package-agreements"],
-      ["winget", "uninstall", ...wingetArgs],
-    ])
+    expect(test.commands).toEqual([["winget", "uninstall", ...wingetArgs]])
     // WinGet moderates submissions, so the OpenCode release service may list a version WinGet cannot install yet.
     expect(test.requests).toEqual([])
   }),
 )
 
-it.live("WinGet update checks report a missing package instead of a version", () =>
+it.live("WinGet lookup cannot supply a version to the Classic updater", () =>
   Effect.gen(function* () {
     const test = yield* winget({
       exitCode: -1978335212,
       stdout: Buffer.from("No package found matching input criteria.\r\n"),
     })
-    const error = yield* test.updater.latest().pipe(Effect.flip)
-    expect(error.message).toBe("No package found matching input criteria.")
+    const error = yield* test.updater.latest("winget").pipe(Effect.flip)
+    expect(error.message).toContain("Unsupported Classic update method")
+    expect(test.commands).toEqual([])
   }),
 )
 
@@ -415,7 +417,7 @@ const links = (directory: string) =>
 const upgradeLinks = (directory: string) =>
   links(directory).filter((name) => name.startsWith(`opencode-upgrade-${process.pid}-`))
 
-windows("windows keeps a second link to the running binary in the cache while the installer runs", () =>
+windows("windows leaves package-managed binaries untouched when Classic refuses their update", () =>
   Effect.gen(function* () {
     const layout = { executable: "", cache: "" }
     const test = yield* fixture(() => {
@@ -431,15 +433,15 @@ windows("windows keeps a second link to the running binary in the cache while th
     // pid 999999999 does not exist; pid 4 is System, alive but not openable (EPERM).
     yield* test.fs.writeFileString(path.join(test.global.cache, "opencode-upgrade-999999999-dead.exe"), "exited")
     yield* test.fs.writeFileString(path.join(test.global.cache, "opencode-service-4-aa.exe"), "inaccessible")
-    yield* test.updater.upgrade("bun", "2.3.4")
-    expect(test.commands).toHaveLength(1)
+    yield* test.updater.upgrade("bun", "2.3.4").pipe(Effect.flip)
+    expect(test.commands).toHaveLength(0)
     // The installed path never disappears; the extra link is released and only dead ones are swept.
     expect(yield* test.fs.readFileString(test.executable)).toBe("binary")
-    expect(links(test.global.cache)).toEqual(["opencode-service-4-aa.exe"])
+    expect(links(test.global.cache)).toEqual(["opencode-upgrade-999999999-dead.exe", "opencode-service-4-aa.exe"])
   }),
 )
 
-windows("windows releases the link when the installer fails", () =>
+windows("windows does not create a retained link for a refused package-manager update", () =>
   Effect.gen(function* () {
     const layout = { cache: "" }
     const test = yield* fixture(() => {
@@ -448,7 +450,7 @@ windows("windows releases the link when the installer fails", () =>
     })
     layout.cache = test.global.cache
     const error = yield* test.updater.upgrade("npm", "2.3.4").pipe(Effect.flip)
-    expect(error.message).toBe("registry denied access")
+    expect(error.message).toContain("Unsupported Classic update method")
     expect(yield* test.fs.readFileString(test.executable)).toBe("binary")
     expect(links(test.global.cache)).toEqual([])
   }),
@@ -496,7 +498,7 @@ windows("windows links the curl binary before the installer replaces it", () =>
     yield* Effect.addFinalizer(() => Effect.sync(() => (process.execPath = original)))
     expect(yield* test.updater.method()).toBe("curl")
     yield* test.updater.upgrade("curl", "2.3.4")
-    expect(test.commands.map((command) => command[0])).toEqual(["curl", test.bash])
+    expect(test.commands.map((command) => command[0])).toEqual([test.bash])
     expect(yield* test.fs.readFileString(layout.executable)).toBe("binary")
     expect(links(test.global.cache)).toEqual([])
   }),
@@ -533,7 +535,7 @@ windows("windows leaves a source checkout's runtime alone", () =>
       return {}
     }, "not-opencode")
     layout.cache = test.global.cache
-    yield* test.updater.upgrade("bun", "2.3.4")
+    yield* test.updater.upgrade("curl", "2.3.4")
     expect(test.commands).toHaveLength(1)
   }),
 )
@@ -546,7 +548,7 @@ unix("other platforms never link the running binary", () =>
       return {}
     })
     layout.cache = test.global.cache
-    yield* test.updater.upgrade("bun", "2.3.4")
+    yield* test.updater.upgrade("curl", "2.3.4")
     expect(yield* test.fs.readFileString(test.executable)).toBe("binary")
   }),
 )
@@ -585,18 +587,15 @@ if (typeof OPENCODE_CLI_NAME === "string" && OPENCODE_CLI_NAME === "opencode2-no
         "@opencode/cli-node",
       )
       expect(yield* test.updater.method()).toBe("npm")
-      yield* test.updater.upgrade("npm", "v2.3.4")
-      yield* test.updater.upgrade("pnpm", "v2.3.4")
-      yield* test.updater.upgrade("vp", "v2.3.4")
+      yield* test.updater.upgrade("npm", "v2.3.4").pipe(Effect.flip)
+      yield* test.updater.upgrade("pnpm", "v2.3.4").pipe(Effect.flip)
+      yield* test.updater.upgrade("vp", "v2.3.4").pipe(Effect.flip)
       expect(test.commands).toEqual([
         ["npm", "list", "-g", "--depth=0", "@opencode/cli-node"],
         ["pnpm", "list", "-g", "--depth=0", "@opencode/cli-node"],
         ["bun", "pm", "ls", "-g"],
         ["yarn", "global", "list"],
         ["vp", "list", "-g", "--json", "@opencode/cli-node"],
-        ["npm", "install", "--global", "@opencode/cli-node@2.3.4"],
-        ["pnpm", "add", "--global", "--allow-build=@opencode/cli-node", "@opencode/cli-node@2.3.4"],
-        ["vp", "update", "-g", "@opencode/cli-node@2.3.4"],
       ])
     }),
   )

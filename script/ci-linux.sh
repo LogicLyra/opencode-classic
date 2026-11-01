@@ -71,6 +71,8 @@ typecheck() {
 }
 
 unit_tests() {
+  cd "$root/packages/classic-release"
+  bun test
   cd "$root/packages/desktop"
   bun test --timeout 30000
   cd "$root/packages/cli"
@@ -78,22 +80,23 @@ unit_tests() {
 }
 
 build_and_smoke() {
+  export OPENCODE_CHANNEL=latest OPENCODE_VERSION="$version" OPENCODE_TARGET=linux-x64-baseline
   cd "$root/packages/cli"
-  bun run script/build.ts --single --skip-install
+  bun run script/build.ts --skip-install
+  test "$(dist/cli-linux-x64-baseline/bin/opencode --version)" = "$version"
   bun run script/service-smoke.ts
+  cd "$root"
+  bun run script/classic-archives.ts
+  test "$(tar -tzf packages/cli/dist/opencode-linux-x64-baseline.tar.gz)" = opencode
 }
 
 package_desktop() {
   local dist="$root/packages/desktop/dist"
-  cd "$root/packages/cli"
-  bun run script/build.ts --single --baseline --skip-install
   test -f "$root/packages/cli/dist/cli-linux-x64-baseline/bin/opencode"
   cd "$root/packages/desktop"
   export OPENCODE_CHANNEL=prod
   export OPENCODE_VERSION="$version"
-  export OPENCODE_CLI_DIST="$root/packages/cli/dist"
-  export OPENCODE_CLI_TARGET="x86_64-unknown-linux-gnu"
-  bun ./scripts/prepare.ts
+  export OPENCODE_TARGET=linux-x64
   bun run build
   bun x electron-builder --linux --x64 --publish never --config electron-builder.config.ts
 
@@ -109,6 +112,9 @@ package_desktop() {
   grep -q "owner: LogicLyra" "$dist/linux-unpacked/resources/app-update.yml"
   grep -q "repo: opencode-classic" "$dist/linux-unpacked/resources/app-update.yml"
   grep -q "updaterCacheDirName: opencode-classic-desktop-updater" "$dist/linux-unpacked/resources/app-update.yml"
+  test "$("$dist/linux-unpacked/resources/opencode-cli" --version)" = "$version"
+  test "$(dpkg-deb -f "$dist/opencode-classic-desktop-linux-amd64.deb" Package)" = opencode-classic
+  test "$(dpkg-deb -f "$dist/opencode-classic-desktop-linux-amd64.deb" Version)" = "$version"
 
   cd "$dist"
   : > linux-packages.sha256
@@ -118,9 +124,16 @@ package_desktop() {
     printf '%s  %s\n' "$hash" "$file" >> linux-packages.sha256
   done
   sha256sum -c linux-packages.sha256
+  install -d -m 0700 "$evidence/artifacts"
+  cp -- opencode-classic-desktop-linux-amd64.deb opencode-classic-desktop-linux-x86_64.rpm latest-linux.yml "$evidence/artifacts/"
+  cp -- linux-unpacked/resources/app-update.yml "$evidence/artifacts/"
+  cp -- "$root/packages/cli/dist/opencode-linux-x64-baseline.tar.gz" "$evidence/artifacts/"
+  cp -- "$root/install" "$root/classic-migration.json" "$evidence/artifacts/"
+  (cd "$evidence/artifacts" && sha256sum -- * > ../artifacts.sha256)
+  (cd "$evidence/artifacts" && sha256sum -c ../artifacts.sha256)
 }
 
-environment
+run environment environment
 run install install_deps
 run typecheck typecheck
 case "$mode" in

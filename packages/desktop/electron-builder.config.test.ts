@@ -8,14 +8,15 @@ import { fileURLToPath, pathToFileURL } from "node:url"
 import type { Configuration } from "electron-builder"
 import { getConfig } from "./electron-builder.config"
 import { CLI_BINARIES, nodePtyPackage } from "./script/utils"
+import { DESKTOP_IDENTITIES, DESKTOP_PACKAGE_NAME, DESKTOP_PROTOCOL } from "./src/identity"
 
 // Use electron-builder's matcher so the tests also cover its glob and directory traversal semantics.
 const { FileMatcher } = createRequire(import.meta.resolve("electron-builder"))("app-builder-lib/out/fileMatcher")
 
 const channels = [
-  { channel: "dev", appId: "ai.opencode.desktop.dev", feed: "dev" },
-  { channel: "beta", appId: "ai.opencode.desktop.beta", feed: "beta" },
-  { channel: "prod", appId: "ai.opencode.desktop", feed: "latest" },
+  { channel: "dev", appId: DESKTOP_IDENTITIES.dev.appId },
+  { channel: "beta", appId: DESKTOP_IDENTITIES.beta.appId },
+  { channel: "prod", appId: DESKTOP_IDENTITIES.prod.appId },
 ] as const
 
 function load(channel: string, target?: string): Configuration {
@@ -47,16 +48,23 @@ function trimFilter(dir: string, config: Configuration) {
   ]).createFilter()
 }
 
-test.each(channels)("channel identity for $channel", ({ channel, appId, feed }) => {
+test.each(channels)("channel identity for $channel", ({ channel, appId }) => {
   const config = load(channel)
   expect(config.appId).toBe(appId)
-  // Every published channel updates from its own feed on the update service.
+  // Runtime release selection pins an exact Classic tag; the packaged fallback is fork-owned too.
   expect(config.publish).toEqual({
-    provider: "generic",
-    url: `https://opencode.ai/update/api/${feed}/desktop/opencode/`,
+    provider: "github",
+    owner: "LogicLyra",
+    repo: "opencode-classic",
     channel: "latest",
   })
   expect(config.extraMetadata?.desktopName).toBe(`${appId}.desktop`)
+  expect(config.extraMetadata?.name).toBe(DESKTOP_PACKAGE_NAME)
+  expect(config.productName).toBe(DESKTOP_IDENTITIES[channel].productName)
+  expect(config.deb?.packageName).toBe(DESKTOP_IDENTITIES[channel].packageName)
+  expect(config.rpm?.packageName).toBe(DESKTOP_IDENTITIES[channel].packageName)
+  expect(config.protocols).toEqual({ name: DESKTOP_IDENTITIES[channel].productName, schemes: [DESKTOP_PROTOCOL] })
+  expect(config.linux?.target).toEqual(["deb", "rpm"])
   // The executable must never end in `.desktop`: libappimage resolves the
   // AppImage's desktop entry by globbing `*.desktop`, and an ELF matching
   // that glob breaks integration (anomalyco/opencode#51867).
@@ -71,7 +79,7 @@ test.each(channels)("channel identity for $channel", ({ channel, appId, feed }) 
     expect(fpm).toContainEqual(expect.stringContaining(`/usr/share/metainfo/${appId}.metainfo.xml`))
     expect(
       fpm?.some((entry) => entry.endsWith("opencode-desktop.desktop=/usr/share/applications/opencode-desktop.desktop")),
-    ).toBe(channel === "prod")
+    ).toBe(false)
   }
 
   // Shared Electron binaries must not ship /usr/lib/.build-id links that collide with other Electron RPMs.

@@ -4,6 +4,7 @@ import { app, autoUpdater } from "electron"
 import pkg from "electron-updater"
 import { Effect } from "effect"
 import type { Platform } from "./machine"
+import { createReleaseClient, downloadBase } from "@opencode-classic/releases"
 
 const updateClient = pkg.autoUpdater
 
@@ -25,7 +26,7 @@ export const make = Effect.fn("Updater.platform")(function* (channel: string) {
   updateClient.channel = "latest"
   updateClient.requestHeaders = { "User-Agent": userAgent }
   updateClient.allowPrerelease = false
-  updateClient.allowDowngrade = true
+  updateClient.allowDowngrade = false
   updateClient.autoDownload = false
   updateClient.autoInstallOnAppQuit = process.platform === "darwin"
   yield* Effect.logInfo("auto updater configured", {
@@ -38,9 +39,13 @@ export const make = Effect.fn("Updater.platform")(function* (channel: string) {
   return {
     checkForUpdate: Effect.tryPromise({
       try: async () => {
+        const target = await createReleaseClient().update(app.getVersion())
+        if (target === app.getVersion()) return undefined
+        updateClient.setFeedURL({ provider: "generic", url: downloadBase(target), channel: "latest" })
         const result = await updateClient.checkForUpdates()
 
         if (!result?.isUpdateAvailable) return undefined
+        if (result.updateInfo.version !== target) throw new Error("Classic updater metadata version mismatch.")
         const files = result.updateInfo.files
         // electron-updater picks the installer whose name contains process.arch, which emulation on Windows ARM64
         // reports as x64. downloadUpdate() reads this same list, so keeping only the ARM64 installer moves the install

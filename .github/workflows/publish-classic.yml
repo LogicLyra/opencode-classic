@@ -9,7 +9,7 @@ on:
         required: true
         type: string
       sha:
-        description: "Approved main commit SHA"
+        description: "Approved classic-v2 commit SHA"
         required: true
         type: string
 
@@ -41,12 +41,15 @@ jobs:
         run: |
           test "$GITHUB_SHA" = "$APPROVED_SHA"
           test "$(git rev-parse origin/classic-v2)" = "$APPROVED_SHA"
-          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+          if [[ ! "$VERSION" =~ ^2\.[0-9]+\.[0-9]+$ ]]; then
             echo "Version must be a stable SemVer without a leading v"
             exit 1
           fi
           # shellcheck disable=SC2016
           VERSION="$VERSION" bun -e 'for (const file of ["packages/cli/package.json", "packages/desktop/package.json"]) { const pkg = await Bun.file(file).json(); if (pkg.version !== process.env.VERSION) throw new Error(`${file} is ${pkg.version}, expected ${process.env.VERSION}`) }'
+          # Classic layout and profile migration must pass acceptance before a v2 draft can become public.
+          # shellcheck disable=SC2016
+          bun -e 'const marker = await Bun.file("classic-migration.json").json(); if (marker.version !== process.env.VERSION || marker.migrationReady !== true) throw new Error("Classic v2 layout/profile migration is not ready for publication")'
           draft=$(gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)
           test "$draft" = true
           # Draft releases do not materialize the git tag until publication, so
@@ -70,4 +73,5 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ inputs.version }}
-        run: gh release edit "v$VERSION" --repo "$GITHUB_REPOSITORY" --draft=false --latest
+        # Legacy clients must continue to discover the v1 bridge through /releases/latest.
+        run: gh release edit "v$VERSION" --repo "$GITHUB_REPOSITORY" --draft=false --latest=false

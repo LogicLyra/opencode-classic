@@ -6,15 +6,9 @@ import { Arch, type Configuration } from "electron-builder"
 import { NativeArch } from "../../script/native-arch"
 import { DESKTOP_NATIVE_ENGLISH } from "@opencode/app/i18n/desktop-native"
 import { CLI_BINARIES, getCurrentCli, nodePtyPackage } from "./script/utils"
+import { DESKTOP_IDENTITIES, DESKTOP_PACKAGE_NAME, DESKTOP_PROTOCOL, DESKTOP_RELEASE_REPOSITORY } from "./src/identity"
 
 const packageDir = path.dirname(fileURLToPath(import.meta.url))
-
-// The Electron 42 packaging update briefly installed Linux launchers/icons under
-// "opencode-desktop". Keep that hidden desktop entry around so existing GNOME/KDE
-// pins still resolve after the canonical app id changes back to ai.opencode.desktop.
-const legacyDesktopEntry = path.join(packageDir, "resources", "linux", "opencode-desktop.desktop")
-
-const legacyDesktopEntryFpm = `${legacyDesktopEntry}=/usr/share/applications/opencode-desktop.desktop`
 
 // rpmbuild adds /usr/lib/.build-id links for every ELF file. The bundled Electron
 // binaries are byte-identical across apps on the same Electron version, so those
@@ -39,12 +33,6 @@ function resolveChannel() {
 
   return "dev"
 }
-
-const APP_IDS = {
-  dev: "ai.opencode.desktop.dev",
-  beta: "ai.opencode.desktop.beta",
-  prod: "ai.opencode.desktop",
-} as const
 
 // libappimage (used by AppImageLauncher) resolves the .desktop entry inside an
 // AppImage by globbing `*.desktop` at the squashfs root. If the main
@@ -76,8 +64,8 @@ const getBase = (appId: string): Configuration => {
     // https://www.electron.build/docs/linux/
     // Release builds take their version from OPENCODE_VERSION instead of rewriting package.json.
     extraMetadata: process.env.OPENCODE_VERSION
-      ? { desktopName, version: process.env.OPENCODE_VERSION }
-      : { desktopName },
+      ? { name: DESKTOP_PACKAGE_NAME, desktopName, version: process.env.OPENCODE_VERSION }
+      : { name: DESKTOP_PACKAGE_NAME, desktopName },
     files: [
       "out/**/*",
       "resources/**/*",
@@ -173,8 +161,8 @@ const getBase = (appId: string): Configuration => {
       target: ["dmg", "zip"],
     },
     protocols: {
-      name: "OpenCode",
-      schemes: ["opencode"],
+      name: "OpenCode Classic",
+      schemes: [DESKTOP_PROTOCOL],
     },
     win: {
       icon: `resources/icons/icon.ico`,
@@ -203,14 +191,15 @@ const getBase = (appId: string): Configuration => {
           StartupWMClass: appId,
         },
       },
-      target: ["AppImage", "deb", "rpm"],
+      target: ["deb", "rpm"],
     },
   }
 }
 
 export function getConfig() {
   const channel = resolveChannel()
-  const appId = APP_IDS[channel]
+  const identity = DESKTOP_IDENTITIES[channel]
+  const appId = identity.appId
   const base = getBase(appId)
 
   switch (channel) {
@@ -218,15 +207,16 @@ export function getConfig() {
       return {
         ...base,
         appId,
-        productName: "OpenCode Dev",
+        productName: identity.productName,
+        protocols: { name: identity.productName, schemes: [DESKTOP_PROTOCOL] },
         publish: {
-          provider: "generic",
-          url: "https://opencode.ai/update/api/dev/desktop/opencode/",
+          provider: "github",
+          ...DESKTOP_RELEASE_REPOSITORY,
           channel: "latest",
         },
-        deb: { fpm: [...previewCompressionFpm("deb"), metainfoFpm(appId)] },
+        deb: { packageName: identity.packageName, fpm: [...previewCompressionFpm("deb"), metainfoFpm(appId)] },
         rpm: {
-          packageName: "opencode-dev",
+          packageName: identity.packageName,
           fpm: [rpmNoBuildIdLinksFpm, ...previewCompressionFpm("rpm"), metainfoFpm(appId)],
         },
       }
@@ -236,16 +226,16 @@ export function getConfig() {
       return {
         ...base,
         appId,
-        productName: "OpenCode Beta",
-        protocols: { name: "OpenCode Beta", schemes: ["opencode"] },
+        productName: identity.productName,
+        protocols: { name: identity.productName, schemes: [DESKTOP_PROTOCOL] },
         publish: {
-          provider: "generic",
-          url: "https://opencode.ai/update/api/beta/desktop/opencode/",
+          provider: "github",
+          ...DESKTOP_RELEASE_REPOSITORY,
           channel: "latest",
         },
-        deb: { fpm: [...previewCompressionFpm("deb"), metainfoFpm(appId)] },
+        deb: { packageName: identity.packageName, fpm: [...previewCompressionFpm("deb"), metainfoFpm(appId)] },
         rpm: {
-          packageName: "opencode-beta",
+          packageName: identity.packageName,
           fpm: [rpmNoBuildIdLinksFpm, ...previewCompressionFpm("rpm"), metainfoFpm(appId)],
         },
       }
@@ -255,8 +245,8 @@ export function getConfig() {
       return {
         ...base,
         appId,
-        productName: "OpenCode",
-        protocols: { name: "OpenCode", schemes: ["opencode"] },
+        productName: identity.productName,
+        protocols: { name: identity.productName, schemes: [DESKTOP_PROTOCOL] },
         linux: { ...base.linux, target: ["deb", "rpm"] },
         // An Icon Composer package compiles to Assets.car, which macOS 26 and later draw the app icon from
         // (Dock, Finder, system dialogs and the system icon styles). Older macOS keeps using the ICNS.
@@ -265,12 +255,11 @@ export function getConfig() {
         dmg: { icon: "resources/icons/icon.icns" },
         publish: {
           provider: "github",
-          owner: "LogicLyra",
-          repo: "opencode-classic",
+          ...DESKTOP_RELEASE_REPOSITORY,
           channel: "latest",
         },
-        deb: { fpm: [metainfoFpm(appId), legacyDesktopEntryFpm] },
-        rpm: { packageName: "opencode", fpm: [rpmNoBuildIdLinksFpm, metainfoFpm(appId), legacyDesktopEntryFpm] },
+        deb: { packageName: identity.packageName, fpm: [metainfoFpm(appId)] },
+        rpm: { packageName: identity.packageName, fpm: [rpmNoBuildIdLinksFpm, metainfoFpm(appId)] },
       }
     }
   }

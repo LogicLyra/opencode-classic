@@ -9,7 +9,7 @@ import os from "node:os"
 import path from "node:path"
 
 const nodeBuild = process.argv.includes("--node")
-const target = `cli${nodeBuild ? "-node" : ""}-${process.platform === "win32" ? "windows" : process.platform}-${process.arch}`
+const target = `cli${nodeBuild ? "-node" : ""}-${process.env.OPENCODE_TARGET ?? `${process.platform === "win32" ? "windows" : process.platform}-${process.arch}`}`
 const directory = path.join(import.meta.dir, "..", "dist", ...(nodeBuild ? ["node"] : []), target, "bin")
 const binary = path.join(
   directory,

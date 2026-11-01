@@ -10,6 +10,8 @@ import { stripVTControlCharacters } from "node:util"
 import { RetainedImage } from "./retained-image"
 import { action, parseReleaseVersion, type Policy } from "./updater-action"
 import { errorMessage } from "../util/error"
+import { createReleaseClient } from "@opencode-classic/releases"
+import semver from "semver"
 
 export const methods = ["curl", "npm", "pnpm", "bun", "yarn", "vp", "brew", "winget"] as const
 
@@ -217,7 +219,10 @@ const make = Effect.gen(function* () {
     if (installedWinget) return "winget"
     if (!installedPackage) return
 
-    const parts = executable.toLowerCase().split(path.sep).map((part) => part.replace(/^\./, ""))
+    const parts = executable
+      .toLowerCase()
+      .split(path.sep)
+      .map((part) => part.replace(/^\./, ""))
     const checks: Array<{ method: Method; command: string[] }> = [
       { method: "npm", command: ["npm", "list", "-g", "--depth=0", installedPackage] },
       { method: "pnpm", command: ["pnpm", "list", "-g", "--depth=0", installedPackage] },
@@ -622,7 +627,150 @@ const make = Effect.gen(function* () {
   return Service.of({ run, check, apply, method, latest, upgrade, removal })
 })
 
-export const layer = Layer.effect(Service, make)
+// Keep upstream's installation detection and uninstall ownership, but route every Classic
+// check/install through immutable fork releases. In particular, none of the upstream
+// package-manager or opencode.ai update methods above are exposed by this layer.
+const makeClassic = make.pipe(
+  Effect.flatMap((original) =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem
+      const global = yield* Global.Service
+      const appProcess = yield* AppProcess.Service
+      const flock = yield* EffectFlock.Service
+      const installed = yield* Ref.make(OPENCODE_VERSION)
+      const releases = createReleaseClient()
+      const failure = (detail: string) =>
+        new UpgradeError({
+          title: "OpenCode Classic could not update",
+          detail,
+          retry: "Run opencode upgrade --method curl to use verified Classic GitHub Releases.",
+        })
+      const latest = (method?: Method) => {
+        if (method && method !== "curl") return Effect.fail(failure(`Unsupported Classic update method: ${method}`))
+        return Ref.get(installed).pipe(
+          Effect.flatMap((current) =>
+            Effect.tryPromise({
+              try: () => releases.update(current),
+              catch: () => failure("Could not verify the Classic release list."),
+            }),
+          ),
+        )
+      }
+      const upgrade = Effect.fn("Classic.upgrade")(function* (method: Method, input: string) {
+        const version = input.trim().replace(/^v/, "")
+        if (!/^\d+\.\d+\.\d+$/.test(version) || !semver.valid(version) || semver.major(version) !== 2)
+          return yield* Effect.fail(new Error(`Invalid version: ${input}`))
+        if (method !== "curl") return yield* Effect.fail(failure(`Unsupported Classic update method: ${method}`))
+        yield* Effect.scoped(
+          Effect.gen(function* () {
+            yield* flock.acquire("cli-upgrade", undefined, { timeoutMs: Duration.toMillis("15 minutes") })
+            const body = yield* Effect.tryPromise({
+              try: () => releases.verifiedAsset(version, "install"),
+              catch: () =>
+                failure("Classic installer checksum verification failed or the release could not be downloaded."),
+            })
+            yield* fs.makeDirectory(global.cache, { recursive: true })
+            const directory = yield* Effect.acquireRelease(
+              fs.makeTempDirectory({ directory: global.cache, prefix: "classic-update-" }),
+              (directory) => fs.remove(directory, { recursive: true, force: true }).pipe(Effect.ignore),
+            )
+            const installer = path.join(directory, "install")
+            yield* fs.writeFileString(installer, body!)
+            const bash =
+              process.platform !== "win32"
+                ? "bash"
+                : yield* Effect.gen(function* () {
+                    if (process.env.OPENCODE_GIT_BASH_PATH) return process.env.OPENCODE_GIT_BASH_PATH
+                    const git = yield* appProcess.run(ChildProcess.make("git", ["--exec-path"]), {
+                      timeout: "30 seconds",
+                    })
+                    const binary = path.resolve(git.stdout.toString("utf8").trim(), "..", "..", "..", "bin", "bash.exe")
+                    if (git.exitCode === 0 && (yield* fs.exists(binary))) return binary
+                    return yield* Effect.fail(failure("Git Bash is required to run the Classic installer on Windows."))
+                  })
+            const execute = appProcess
+              .run(
+                ChildProcess.make(bash, [installer, "--version", version, "--no-modify-path"], {
+                  env: { HOME: global.home },
+                  extendEnv: true,
+                }),
+                { timeout: "5 minutes", maxOutputBytes: 100_000, maxErrorBytes: 100_000 },
+              )
+              .pipe(
+                Effect.flatMap((result) =>
+                  result.exitCode === 0
+                    ? Effect.void
+                    : Effect.fail(failure(`Classic installer failed (exit code ${result.exitCode}).`)),
+                ),
+              )
+            const executable = yield* fs.realPath(process.execPath).pipe(Effect.orElseSucceed(() => process.execPath))
+            const own = path.join(
+              global.home,
+              ".opencode",
+              "bin",
+              process.platform === "win32" ? "opencode.exe" : "opencode",
+            )
+            const canonical = yield* fs.realPath(own).pipe(Effect.orElseSucceed(() => own))
+            yield* process.platform === "win32" && executable === canonical
+              ? RetainedImage.retain(global.cache, "upgrade").pipe(Effect.andThen(execute))
+              : execute
+          }),
+        ).pipe(
+          Effect.mapError((cause) =>
+            cause instanceof UpgradeError ? cause : failure("Could not install the Classic release."),
+          ),
+        )
+      })
+      const apply = Effect.fn("Classic.apply")(function* (version: string) {
+        const method = yield* original.method()
+        if (method !== "curl")
+          return yield* Effect.fail(failure("This installation is not managed by the Classic installer."))
+        const current = yield* Ref.get(installed)
+        if (semver.valid(current) && semver.valid(version) && semver.lt(version, current))
+          return yield* Effect.fail(failure("Automatic Classic downgrades are not supported."))
+        yield* upgrade(method, version)
+        yield* Ref.set(installed, version)
+      })
+      const check = Effect.fn("Classic.check")(function* () {
+        if (OPENCODE_LOCAL)
+          return { type: "unavailable" as const, message: "Use an installed Classic release to check for updates." }
+        const method = yield* original.method()
+        if (method !== "curl")
+          return { type: "unavailable" as const, message: "This installation is not managed by the Classic installer." }
+        const version = yield* latest(method)
+        const current = yield* Ref.get(installed)
+        if (action(current, version, "notify") !== "none") return { type: "available" as const, version }
+        return action(OPENCODE_VERSION, current, "notify") === "none"
+          ? undefined
+          : { type: "installed" as const, version: current }
+      })
+      const run = Effect.fn("Classic.run")(
+        function* (onInstall: (version: string) => void = () => {}) {
+          if (OPENCODE_LOCAL || ["1", "true"].includes(process.env.OPENCODE_DISABLE_AUTOUPDATE?.toLowerCase() ?? ""))
+            return
+          const values = yield* Effect.forEach(["config.json", "opencode.json", "opencode.jsonc"], (name) =>
+            fs.readFileString(path.join(global.config, name)).pipe(
+              Effect.map(decodePolicy),
+              Effect.orElseSucceed(() => undefined),
+            ),
+          )
+          const policy = values.findLast((value) => value !== undefined) ?? "notify"
+          if (policy === "disable") return
+          const result = yield* check()
+          if (!result || result.type !== "available") return
+          if (policy === "notify") return result
+          onInstall(result.version)
+          yield* apply(result.version)
+          return { type: "installed" as const, version: result.version }
+        },
+        Effect.catch((error) => Effect.logWarning("Classic update check failed", { error }).pipe(Effect.as(undefined))),
+      )
+      return Service.of({ ...original, latest, upgrade, apply, check, run })
+    }),
+  ),
+)
+
+export const layer = Layer.effect(Service, makeClassic)
 
 export * as Updater from "./updater"
 export { action, type Action, type Policy } from "./updater-action"

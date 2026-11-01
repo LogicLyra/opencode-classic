@@ -26,7 +26,7 @@ jobs:
     runs-on: ubuntu-24.04
     environment: release-draft
     steps:
-      - uses: actions/checkout@f43e0e5ff2bd294095638e18286ca3a3d1956744 # v3.6.0
+      - uses: actions/checkout@f43a0e5ff2bd294095638e18286ca9a3d1956744 # v3.6.0
         with:
           fetch-depth: 0
           fetch-tags: true
@@ -41,13 +41,15 @@ jobs:
         run: |
           test "$GITHUB_SHA" = "$APPROVED_SHA"
           test "$(git rev-parse origin/classic-v2)" = "$APPROVED_SHA"
-          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+          if [[ ! "$VERSION" =~ ^2\.[0-9]+\.[0-9]+$ ]]; then
             echo "Version must be a stable SemVer without a leading v"
             exit 1
           fi
 
           # shellcheck disable=SC2016
           VERSION="$VERSION" bun -e 'for (const file of ["packages/cli/package.json", "packages/desktop/package.json"]) { const pkg = await Bun.file(file).json(); if (pkg.version !== process.env.VERSION) throw new Error(`${file} is ${pkg.version}, expected ${process.env.VERSION}`) }'
+          # shellcheck disable=SC2016
+          bun -e 'const marker = await Bun.file("classic-migration.json").json(); if (marker.schemaVersion !== 1 || marker.version !== process.env.VERSION || marker.sourceMajor !== 1 || marker.minimumVersion !== "1.19.5" || typeof marker.migrationReady !== "boolean") throw new Error("Invalid Classic migration metadata")'
 
           published=$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" --jq '.[] | select(.draft == false and .prerelease == false) | .tag_name')
           # shellcheck disable=SC2016
@@ -79,35 +81,25 @@ jobs:
       - name: Build CLI archives
         working-directory: packages/cli
         env:
-          OPENCODE_CHANNEL: prod
+          OPENCODE_CHANNEL: latest
           OPENCODE_VERSION: ${{ inputs.version }}
         run: bun run script/build.ts
 
-      - name: Archive Linux CLI targets
-        run: |
-          cd packages/cli/dist
-          tar -czf opencode-linux-x64.tar.gz cli-linux-x64
-          tar -czf opencode-linux-x64-baseline.tar.gz cli-linux-x64-baseline
+      - name: Archive CLI targets
+        env:
+          OPENCODE_VERSION: ${{ inputs.version }}
+        run: bun run script/classic-archives.ts
 
       - name: Upload CLI archives
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ inputs.version }}
-        run: gh release upload "v$VERSION" packages/cli/dist/opencode-linux-x64.tar.gz packages/cli/dist/opencode-linux-x64-baseline.tar.gz --repo "$GITHUB_REPOSITORY"
+        run: gh release upload "v$VERSION" packages/cli/dist/*.tar.gz packages/cli/dist/*.zip install classic-migration.json --repo "$GITHUB_REPOSITORY"
 
       - name: Install Linux packaging tools
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends rpm
-
-      - name: Prepare desktop
-        working-directory: packages/desktop
-        env:
-          OPENCODE_CHANNEL: prod
-          OPENCODE_VERSION: ${{ inputs.version }}
-          OPENCODE_CLI_DIST: ${{ github.workspace }}/packages/cli/dist
-          OPENCODE_CLI_TARGET: x86_64-unknown-linux-gnu
-        run: bun ./scripts/prepare.ts
 
       - name: Build desktop
         working-directory: packages/desktop
@@ -115,12 +107,15 @@ jobs:
           NODE_OPTIONS: --max-old-space-size=4096
           OPENCODE_CHANNEL: prod
           OPENCODE_VERSION: ${{ inputs.version }}
+          OPENCODE_TARGET: linux-x64
         run: bun run build
 
       - name: Package Linux x64 desktop
         working-directory: packages/desktop
         env:
           OPENCODE_CHANNEL: prod
+          OPENCODE_VERSION: ${{ inputs.version }}
+          OPENCODE_TARGET: linux-x64
         run: bun x electron-builder --linux --x64 --publish never --config electron-builder.config.ts
 
       - name: Upload desktop assets
@@ -149,6 +144,7 @@ jobs:
           VERSION="$VERSION" bun -e 'const text = await Bun.file("packages/desktop/dist/latest-linux.yml").text(); if (!text.includes(`version: ${process.env.VERSION}`)) throw new Error("Updater metadata version mismatch"); for (const ext of [".deb", ".rpm"]) if (!text.includes(ext)) throw new Error(`Updater metadata does not reference ${ext}`); if (text.toLowerCase().includes("appimage")) throw new Error("Updater metadata unexpectedly references AppImage")'
           # shellcheck disable=SC2016
           bun -e 'const text = await Bun.file("packages/desktop/dist/linux-unpacked/resources/app-update.yml").text(); for (const expected of ["owner: LogicLyra", "repo: opencode-classic", "updaterCacheDirName: opencode-classic-desktop-updater"]) if (!text.includes(expected)) throw new Error(`Missing updater provider setting: ${expected}`)'
+          test "$(packages/desktop/dist/linux-unpacked/resources/opencode-cli --version)" = "$VERSION"
           gh release upload "v$VERSION" "$metadata" --repo "$GITHUB_REPOSITORY"
 
       - name: Generate and upload checksums
@@ -158,8 +154,10 @@ jobs:
         run: |
           shopt -s nullglob
           files=(
-            packages/cli/dist/opencode-linux-x64.tar.gz
-            packages/cli/dist/opencode-linux-x64-baseline.tar.gz
+            install
+            classic-migration.json
+            packages/cli/dist/*.tar.gz
+            packages/cli/dist/*.zip
             packages/desktop/dist/*.deb
             packages/desktop/dist/*.rpm
             packages/desktop/dist/latest-linux.yml
@@ -180,8 +178,10 @@ jobs:
         with:
           subject-path: |
             SHA256SUMS
-            packages/cli/dist/opencode-linux-x64.tar.gz
-            packages/cli/dist/opencode-linux-x64-baseline.tar.gz
+            install
+            classic-migration.json
+            packages/cli/dist/*.tar.gz
+            packages/cli/dist/*.zip
             packages/desktop/dist/*.deb
             packages/desktop/dist/*.rpm
             packages/desktop/dist/latest-linux.yml
@@ -192,7 +192,7 @@ jobs:
           VERSION: ${{ inputs.version }}
         run: |
           assets=$(gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')
-          for required in SHA256SUMS opencode-linux-x64.tar.gz opencode-linux-x64-baseline.tar.gz opencode-classic-desktop-linux-amd64.deb opencode-classic-desktop-linux-x86_64.rpm latest-linux.yml; do
+          for required in install classic-migration.json SHA256SUMS opencode-linux-x64.tar.gz opencode-linux-x64-baseline.tar.gz opencode-classic-desktop-linux-amd64.deb opencode-classic-desktop-linux-x86_64.rpm latest-linux.yml; do
             if ! grep -Fxq "$required" <<<"$assets"; then
               echo "Missing release asset: $required"
               exit 1

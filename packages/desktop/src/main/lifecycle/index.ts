@@ -13,6 +13,7 @@ import { marks } from "./marks"
 import { initializeFirstLaunchOnboarding } from "./onboarding"
 import { Shutdown } from "./shutdown"
 import { consoleReturnWindow } from "./deep-link"
+import { DESKTOP_PROTOCOL, normalizeDesktopDeepLink } from "../../identity"
 
 export interface Interface {
   readonly relaunch: () => void
@@ -53,7 +54,8 @@ const runtime = Layer.effect(
       win.focus()
     }
 
-    const emitDeepLinks = (urls: string[]) => {
+    const emitDeepLinks = (input: string[]) => {
+      const urls = input.map(normalizeDesktopDeepLink)
       if (!urls.length) return
       pendingDeepLinks.push(...urls)
 
@@ -86,7 +88,7 @@ const runtime = Layer.effect(
     }
 
     const secondInstance = (_event: Event, argv: string[]) => {
-      const urls = argv.filter((arg) => arg.startsWith("opencode://"))
+      const urls = argv.filter((arg) => arg.startsWith(`${DESKTOP_PROTOCOL}://`))
 
       if (urls.length) {
         runFork(Effect.logInfo("deep link received via second-instance", { urls }))
