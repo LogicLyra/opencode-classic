@@ -144,7 +144,7 @@ jobs:
           VERSION="$VERSION" bun -e 'const text = await Bun.file("packages/desktop/dist/latest-linux.yml").text(); if (!text.includes(`version: ${process.env.VERSION}`)) throw new Error("Updater metadata version mismatch"); for (const ext of [".deb", ".rpm"]) if (!text.includes(ext)) throw new Error(`Updater metadata does not reference ${ext}`); if (text.toLowerCase().includes("appimage")) throw new Error("Updater metadata unexpectedly references AppImage")'
           # shellcheck disable=SC2016
           bun -e 'const text = await Bun.file("packages/desktop/dist/linux-unpacked/resources/app-update.yml").text(); for (const expected of ["owner: LogicLyra", "repo: opencode-classic", "updaterCacheDirName: opencode-classic-desktop-updater"]) if (!text.includes(expected)) throw new Error(`Missing updater provider setting: ${expected}`)'
-          test "$(packages/desktop/dist/linux-unpacked/resources/opencode-cli --version)" = "$VERSION"
+          test "$(packages/desktop/dist/linux-unpacked/resources/opencode-cli --version)" = "opencode v$VERSION"
           gh release upload "v$VERSION" "$metadata" --repo "$GITHUB_REPOSITORY"
 
       - name: Generate and upload checksums

@@ -83,7 +83,7 @@ build_and_smoke() {
   export OPENCODE_CHANNEL=latest OPENCODE_VERSION="$version" OPENCODE_TARGET=linux-x64-baseline
   cd "$root/packages/cli"
   bun run script/build.ts --skip-install
-  test "$(dist/cli-linux-x64-baseline/bin/opencode --version)" = "$version"
+  test "$(dist/cli-linux-x64-baseline/bin/opencode --version)" = "opencode v$version"
   bun run script/service-smoke.ts
   cd "$root"
   bun run script/classic-archives.ts
@@ -112,7 +112,7 @@ package_desktop() {
   grep -q "owner: LogicLyra" "$dist/linux-unpacked/resources/app-update.yml"
   grep -q "repo: opencode-classic" "$dist/linux-unpacked/resources/app-update.yml"
   grep -q "updaterCacheDirName: opencode-classic-desktop-updater" "$dist/linux-unpacked/resources/app-update.yml"
-  test "$("$dist/linux-unpacked/resources/opencode-cli" --version)" = "$version"
+  test "$("$dist/linux-unpacked/resources/opencode-cli" --version)" = "opencode v$version"
   test "$(dpkg-deb -f "$dist/opencode-classic-desktop-linux-amd64.deb" Package)" = opencode-classic
   test "$(dpkg-deb -f "$dist/opencode-classic-desktop-linux-amd64.deb" Version)" = "$version"
 
