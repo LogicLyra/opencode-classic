@@ -716,6 +716,7 @@ const makeClassic = make.pipe(
               : execute
           }),
         ).pipe(
+          Effect.provideService(FileSystem.FileSystem, fs),
           Effect.mapError((cause) =>
             cause instanceof UpgradeError ? cause : failure("Could not install the Classic release."),
           ),

@@ -54,6 +54,7 @@
     "ws": "8.21.0"
   },
   "devDependencies": {
+    "@types/semver": "catalog:",
     "@opencode/script": "workspace:*",
     "@opencode/protocol": "workspace:*",
     "@tsconfig/bun": "catalog:",
