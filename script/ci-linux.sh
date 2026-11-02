@@ -63,8 +63,8 @@ static_checks() {
   actionlint -color=false -shellcheck shellcheck \
     "$root/.github/workflows/release-classic.yml" \
     "$root/.github/workflows/publish-classic.yml"
-  bash -n "$root/install" "$root/script/ci-linux.sh" "$root/script/ci-linux-runtime.sh"
-  shellcheck --severity=error "$root/install" "$root/script/ci-linux.sh" "$root/script/ci-linux-runtime.sh"
+  bash -n "$root/install" "$root/install-classic" "$root/script/ci-linux.sh" "$root/script/ci-linux-runtime.sh"
+  shellcheck --severity=error "$root/install" "$root/install-classic" "$root/script/ci-linux.sh" "$root/script/ci-linux-runtime.sh"
 }
 
 dependencies() {
@@ -90,6 +90,7 @@ focused() {
       src/main/store-name.test.ts \
       src/main/classic-update.test.ts \
       src/main/updater-controller.test.ts \
+      src/main/migration-controller.test.ts \
       src/renderer/html.test.ts
   )
   (
@@ -213,6 +214,11 @@ package_linux() {
   install -d -m 0700 "$tmp/rpmdb"
   rpm --dbpath "$tmp/rpmdb" -qip "$dist/opencode-classic-desktop-linux-x86_64.rpm" \
     > "$evidence/rpm-info.txt"
+  install -d -m 0700 "$evidence/artifacts"
+  cp -- "$dist/opencode-classic-desktop-linux-amd64.deb" "$dist/opencode-classic-desktop-linux-x86_64.rpm" \
+    "$dist/latest-linux.yml" "$dist/linux-unpacked/resources/app-update.yml" \
+    "$dist/linux-unpacked/resources/opencode-cli" "$root/install" "$root/install-classic" "$evidence/artifacts/"
+  (cd "$evidence/artifacts" && sha256sum -- * > ../artifacts.sha256 && sha256sum -c ../artifacts.sha256)
 }
 
 run environment environment
