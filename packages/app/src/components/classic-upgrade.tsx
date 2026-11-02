@@ -25,6 +25,7 @@ export function ClassicUpgradeCard() {
     dialog.show(() => <DialogClassicUpgrade />)
   }
   const run = async () => {
+    if (store.busy) return
     setStore("busy", true)
     try {
       if (offer()) await review()
@@ -49,7 +50,7 @@ export function ClassicUpgradeCard() {
         </p>
         <MigrationError />
         <div class="flex flex-wrap gap-2">
-          <Button size="small" variant="secondary" disabled={store.busy} onClick={run}>
+          <Button size="small" variant="secondary" aria-busy={store.busy} aria-disabled={store.busy} onClick={run}>
             {language.t(offer() ? "classicUpgrade.review" : "classicUpgrade.check")}
           </Button>
         </div>
