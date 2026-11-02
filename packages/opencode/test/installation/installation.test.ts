@@ -290,6 +290,7 @@ describe("installation", () => {
         },
         (cmd, args) => {
           curlCalls.push(cmd)
+          if (cmd === "ldd" && args[0] === "--version") return "GNU libc"
           if (cmd === "bash" && args[0] === "--version") return "GNU bash"
           return ""
         },
@@ -297,10 +298,12 @@ describe("installation", () => {
     ).effect("refuses migration before a verified Classic v2 release is ready", () =>
       Effect.gen(function* () {
         curlUrls.length = 0
+        curlCalls.length = 0
         const error = yield* Effect.flip(Installation.use.upgradeMajor("curl"))
         expect(error.stderr).toContain("not available yet")
         expect(curlUrls.every((url) => url.includes("LogicLyra/opencode-classic"))).toBe(true)
-        expect(curlCalls).toEqual([])
+        expect(curlUrls.length).toBeGreaterThan(0)
+        expect(curlCalls).toEqual(process.platform === "linux" ? ["ldd"] : [])
       }),
     )
 
