@@ -217,7 +217,7 @@ package_linux() {
   install -d -m 0700 "$evidence/artifacts"
   cp -- "$dist/opencode-classic-desktop-linux-amd64.deb" "$dist/opencode-classic-desktop-linux-x86_64.rpm" \
     "$dist/latest-linux.yml" "$dist/linux-unpacked/resources/app-update.yml" \
-    "$dist/linux-unpacked/resources/opencode-cli" "$root/install" "$root/install-classic" "$evidence/artifacts/"
+    "$root/install" "$root/install-classic" "$evidence/artifacts/"
   (cd "$evidence/artifacts" && sha256sum -- * > ../artifacts.sha256 && sha256sum -c ../artifacts.sha256)
 }
 
