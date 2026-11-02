@@ -4,19 +4,20 @@ import { createReleaseClient, downloadBase } from "@opencode-classic/releases"
 import { checkClassicUpdate } from "./classic-update"
 import { createUpdaterController } from "./updater-controller"
 
-test.each([false, true])("desktop bridge preserves in-client restart flow; migration ready=%s", async (ready) => {
+test.each([false, true])("ordinary desktop checks only download maintenance; migration ready=%s", async (ready) => {
   const body = JSON.stringify({
     schemaVersion: 1,
     version: "2.2.5",
     migrationReady: ready,
     sourceMajor: 1,
-    minimumVersion: "1.19.5",
+    minimumVersion: "1.20.0",
+    supportedUpgradeTargets: ["desktop-linux-x64-deb"],
   })
   const releases = createReleaseClient(async (url) => ({
     status: 200,
     body: url.includes("/releases?")
       ? JSON.stringify(
-          ["2.2.5", "1.19.5"].map((version) => ({ tag_name: `v${version}`, draft: false, prerelease: false })),
+          ["2.2.5", "1.20.1"].map((version) => ({ tag_name: `v${version}`, draft: false, prerelease: false })),
         )
       : url.endsWith("SHA256SUMS")
         ? `${createHash("sha256").update(body).digest("hex")}  classic-migration.json\n`
@@ -25,19 +26,19 @@ test.each([false, true])("desktop bridge preserves in-client restart flow; migra
   const calls: string[] = []
   const backend = {
     setFeedURL(options: { provider: "generic"; url: string; channel: string }) {
-      expect(options).toEqual({ provider: "generic", url: downloadBase("2.2.5"), channel: "latest" })
+      expect(options).toEqual({ provider: "generic", url: downloadBase("1.20.1"), channel: "latest" })
       calls.push("feed")
     },
     async checkForUpdates() {
       calls.push("check")
-      return { isUpdateAvailable: true, updateInfo: { version: "2.2.5" } }
+      return { isUpdateAvailable: true, updateInfo: { version: "1.20.1" } }
     },
   }
   const controller = createUpdaterController({
     enabled: true,
-    currentVersion: "1.19.5",
+    currentVersion: "1.20.0",
     backend: {
-      checkForUpdates: () => checkClassicUpdate(backend, "1.19.5", releases),
+      checkForUpdates: () => checkClassicUpdate(backend, "1.20.0", releases),
       downloadUpdate: async () => {
         calls.push("download")
       },
@@ -57,12 +58,7 @@ test.each([false, true])("desktop bridge preserves in-client restart flow; migra
     },
   })
   await controller.start()
-  if (!ready) {
-    expect(controller.getState()).toEqual({ status: "up-to-date" })
-    expect(calls).toEqual([])
-    return
-  }
-  expect(controller.getState()).toEqual({ status: "ready", version: "2.2.5" })
+  expect(controller.getState()).toEqual({ status: "ready", version: "1.20.1" })
   expect(calls).toEqual(["feed", "check", "download", "persist"])
   await controller.install()
   expect(calls).toEqual(["feed", "check", "download", "persist", "stop", "install"])

@@ -10,7 +10,7 @@ import { AppProcess } from "@opencode-ai/core/process"
 import path from "path"
 import { makeRuntime } from "@opencode-ai/core/effect/runtime"
 import semver from "semver"
-import { checksumMatches, createReleaseClient, instructions } from "@opencode-classic/releases"
+import { checksumMatches, cliReleaseTarget, createReleaseClient, instructions } from "@opencode-classic/releases"
 import { InstallationChannel, InstallationVersion } from "@opencode-ai/core/installation/version"
 import { InstallationEvent } from "@opencode-ai/schema/installation-event"
 
@@ -225,18 +225,16 @@ const layer: Layer.Layer<Service, never, HttpClient.HttpClient | AppProcess.Serv
             stderr: `OpenCode Classic's upgrade --major supports curl installs only. See ${MAJOR_INSTRUCTIONS}`,
           })
         }
-        const target = yield* Effect.tryPromise(() => releases.update(InstallationVersion, true)).pipe(
+        const context = cliReleaseTarget(process.platform, process.arch, process.platform === "linux" ? yield* text(["ldd", "--version"]) : "")
+        const offer = context ? yield* Effect.tryPromise(() => releases.migrationOffer(InstallationVersion, context)).pipe(
           Effect.mapError(() => new UpgradeFailedError({ stderr: "Could not verify a Classic migration release." })),
-        )
-        if (
-          !semver.valid(target) ||
-          !semver.valid(InstallationVersion) ||
-          semver.major(target) !== semver.major(InstallationVersion) + 1
-        ) {
+        ) : undefined
+        if (!offer) {
           return yield* new UpgradeFailedError({
             stderr: `A migration-ready OpenCode Classic v2 release is not available yet. Continue using Classic v1. See ${MAJOR_INSTRUCTIONS}`,
           })
         }
+        const target = offer.version
         const outcome = yield* upgradeCurl(target)
         if (outcome.code !== 0) return yield* new UpgradeFailedError({ stderr: upgradeFailure(outcome) })
         yield* Effect.logInfo("upgraded major", { method: m, target })

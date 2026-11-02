@@ -7,7 +7,11 @@ type Backend = {
 
 // Pin metadata and payloads to one immutable release rather than GitHub's unscoped Latest feed.
 export async function checkClassicUpdate(backend: Backend, current: string, releases = createReleaseClient()) {
-  const target = await releases.update(current, true)
+  const target = await releases.update(current)
+  return checkClassicTarget(backend, current, target)
+}
+
+export async function checkClassicTarget(backend: Backend, current: string, target: string) {
   if (target === current) return { isUpdateAvailable: false }
   backend.setFeedURL({ provider: "generic", url: downloadBase(target), channel: "latest" })
   const result = await backend.checkForUpdates()
