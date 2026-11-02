@@ -1,12 +1,19 @@
 import { describe, expect, test } from "bun:test"
 import { createHash } from "node:crypto"
-import { checksumMatches, createReleaseClient, downloadBase, migrationAsset, targetAsset, type Request } from "."
+import { checksumMatches, createReleaseClient, downloadBase, migrationAsset, targetAsset, validateProductionRelease, type Request } from "."
 
 const release = (version: string, extra = {}) => ({
   tag_name: `v${version}`,
   draft: false,
   prerelease: false,
-  assets: ["install", "SHA256SUMS", migrationAsset, "latest-linux.yml", targetAsset("desktop-linux-x64-deb"), targetAsset("cli-linux-x64-baseline")].map((name) => ({ name })),
+  assets: [
+    "install",
+    "SHA256SUMS",
+    migrationAsset,
+    "latest-linux.yml",
+    targetAsset("desktop-linux-x64-deb"),
+    targetAsset("cli-linux-x64-baseline"),
+  ].map((name) => ({ name })),
   ...extra,
 })
 const manifest = (extra = {}) =>
@@ -41,6 +48,31 @@ function fixture(input: { releases?: unknown[]; marker?: string; sums?: string; 
 }
 
 describe("Classic release coexistence", () => {
+  test.each([
+    { marker: {}, accepted: true },
+    { marker: { minimumVersion: "1.19.5" }, accepted: false },
+    { marker: { minimumVersion: "1.20.1" }, accepted: false },
+    { marker: { migrationReady: false }, accepted: false },
+    { marker: { freshInstallReady: false }, accepted: false },
+    { marker: { supportedUpgradeTargets: [] }, accepted: false },
+    { marker: { supportedFreshInstallTargets: [] }, accepted: false },
+    { marker: { supportedFreshInstallTargets: ["desktop-linux-x64-deb"] }, accepted: false },
+  ])("publisher verifies real bridge/readiness/target contracts: %j", (input) => {
+    const body = manifest(input.marker)
+    const validate = () => validateProductionRelease({
+      version: "2.2.5", sourceManifest: body, uploadedManifest: body,
+      publishedVersions: ["1.19.5", "1.20.0"],
+      assets: release("2.2.5").assets.map((asset) => asset.name),
+    })
+    if (input.accepted) expect(validate().minimumVersion).toBe("1.20.0")
+    else expect(validate).toThrow()
+  })
+
+  test("publisher rejects altered uploaded metadata and unsupported advertised payloads", () => {
+    const input = { version: "2.2.5", sourceManifest: manifest(), uploadedManifest: manifest(), publishedVersions: ["1.20.0"], assets: release("2.2.5").assets.map((asset) => asset.name) }
+    expect(() => validateProductionRelease({ ...input, uploadedManifest: `${input.uploadedManifest}\n` })).toThrow("approved source")
+    expect(() => validateProductionRelease({ ...input, assets: input.assets.filter((name) => !name.endsWith(".deb")) })).toThrow("missing assets")
+  })
   test.each([
     { current: "1.19.3", marker: undefined, expected: "1.19.5" },
     { current: "1.19.5", marker: manifest(), expected: "1.19.5" },
@@ -98,7 +130,9 @@ describe("Classic release coexistence", () => {
 
   test("a corrupt migration marker never enables a major update", async () => {
     const app = fixture({ marker: manifest(), sums: `${"0".repeat(64)}  ${migrationAsset}\n` })
-    await expect(app.client.migrationOffer("1.20.0", "desktop-linux-x64-deb")).rejects.toThrow("checksum verification failed")
+    await expect(app.client.migrationOffer("1.20.0", "desktop-linux-x64-deb")).rejects.toThrow(
+      "checksum verification failed",
+    )
   })
 
   test("network failures are not reported as up to date", async () => {
@@ -138,18 +172,21 @@ describe("Classic release coexistence", () => {
     expect(result?.version).toBe(input.offered ? "2.2.5" : undefined)
   })
 
-  test.each(["valid", "malformed", "missing", "corrupt"])("maintenance and migration are independent: %s", async (mode) => {
-    const app = fixture({
-      releases: [release("2.2.5"), release("1.20.1")],
-      marker: mode === "missing" ? undefined : mode === "malformed" ? "{}" : manifest(),
-      ...(mode === "corrupt" ? { sums: sum("wrong body") } : {}),
-    })
-    const result = await app.client.discover("1.20.0", "desktop-linux-x64-deb")
-    expect(result.maintenance).toBe("1.20.1")
-    expect(result.migration.status).toBe(mode === "valid" ? "offered" : mode === "missing" ? "unavailable" : "error")
-    expect(app.calls.filter((url) => url.includes("/releases?"))).toHaveLength(1)
-    expect(app.calls.some((url) => url.endsWith("/install"))).toBe(false)
-  })
+  test.each(["valid", "malformed", "missing", "corrupt"])(
+    "maintenance and migration are independent: %s",
+    async (mode) => {
+      const app = fixture({
+        releases: [release("2.2.5"), release("1.20.1")],
+        marker: mode === "missing" ? undefined : mode === "malformed" ? "{}" : manifest(),
+        ...(mode === "corrupt" ? { sums: sum("wrong body") } : {}),
+      })
+      const result = await app.client.discover("1.20.0", "desktop-linux-x64-deb")
+      expect(result.maintenance).toBe("1.20.1")
+      expect(result.migration.status).toBe(mode === "valid" ? "offered" : mode === "missing" ? "unavailable" : "error")
+      expect(app.calls.filter((url) => url.includes("/releases?"))).toHaveLength(1)
+      expect(app.calls.some((url) => url.endsWith("/install"))).toBe(false)
+    },
+  )
 
   test("supported targets still require their actual release assets", async () => {
     const app = fixture({ marker: manifest(), releases: [release("2.2.5", { assets: [] })] })
@@ -169,7 +206,11 @@ describe("Classic release coexistence", () => {
     { major: 2 as const, marker: manifest({ freshInstallReady: false }), expected: undefined },
     { major: 2 as const, marker: manifest({ freshInstallReady: undefined }), expected: undefined },
     { major: 2 as const, marker: manifest({ supportedFreshInstallTargets: undefined }), expected: undefined },
-    { major: 2 as const, marker: manifest({ supportedFreshInstallTargets: ["desktop-linux-x64-rpm"] }), expected: undefined },
+    {
+      major: 2 as const,
+      marker: manifest({ supportedFreshInstallTargets: ["desktop-linux-x64-rpm"] }),
+      expected: undefined,
+    },
   ])("fresh install major $major -> $expected", async (input) => {
     expect(await fixture(input).client.freshInstall(input.major, "desktop-linux-x64-deb")).toBe(input.expected)
   })
@@ -187,6 +228,8 @@ describe("Classic release coexistence", () => {
     { supportedFreshInstallTargets: ["desktop-linux-x64-deb", "desktop-linux-x64-deb"] },
     { freshInstallReady: "true" },
   ])("invalid capability metadata fails closed: %j", async (extra) => {
-    await expect(fixture({ marker: manifest(extra) }).client.migrationOffer("1.20.0", "desktop-linux-x64-deb")).rejects.toThrow()
+    await expect(
+      fixture({ marker: manifest(extra) }).client.migrationOffer("1.20.0", "desktop-linux-x64-deb"),
+    ).rejects.toThrow()
   })
 })

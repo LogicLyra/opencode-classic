@@ -94,7 +94,11 @@ export function createReleaseClient(get: Request = request) {
     return (await snapshot()).map((release) => release.version)
   }
 
-  async function verifiedAsset(version: string, name: "install" | "install-classic" | typeof migrationAsset, optional = false) {
+  async function verifiedAsset(
+    version: string,
+    name: "install" | "install-classic" | typeof migrationAsset,
+    optional = false,
+  ) {
     const base = downloadBase(version)
     const body = await text(`${base}${name}`, optional)
     if (body === undefined) return undefined
@@ -127,7 +131,8 @@ export function createReleaseClient(get: Request = request) {
         !semver.gte(current, data.minimumVersion) ||
         !data.supportedUpgradeTargets?.includes(target) ||
         !hasAssets(release, target, true)
-      ) continue
+      )
+        continue
       return {
         version: release.version,
         minimumVersion: data.minimumVersion,
@@ -142,7 +147,7 @@ export function createReleaseClient(get: Request = request) {
     const offer: MigrationDiscovery = !target
       ? { status: "unavailable" }
       : await migration(current, target, releases).then(
-          (offer): MigrationDiscovery => offer ? { status: "offered", offer } : { status: "unavailable" },
+          (offer): MigrationDiscovery => (offer ? { status: "offered", offer } : { status: "unavailable" }),
           (): MigrationDiscovery => ({ status: "error", code: "verification" }),
         )
     return { maintenance: stable(current) ? maintenance(current, releases) : current, migration: offer }
@@ -172,11 +177,16 @@ export function createReleaseClient(get: Request = request) {
 export function parseMigrationManifest(body: string, version: string) {
   const data: unknown = JSON.parse(body)
   if (
-    !record(data) || data.schemaVersion !== 1 || data.version !== version ||
-    typeof data.migrationReady !== "boolean" || !Number.isInteger(data.sourceMajor) ||
-    typeof data.minimumVersion !== "string" || !stable(data.minimumVersion) ||
+    !record(data) ||
+    data.schemaVersion !== 1 ||
+    data.version !== version ||
+    typeof data.migrationReady !== "boolean" ||
+    !Number.isInteger(data.sourceMajor) ||
+    typeof data.minimumVersion !== "string" ||
+    !stable(data.minimumVersion) ||
     (data.freshInstallReady !== undefined && typeof data.freshInstallReady !== "boolean")
-  ) throw new Error("Invalid Classic migration manifest.")
+  )
+    throw new Error("Invalid Classic migration manifest.")
   return {
     schemaVersion: 1 as const,
     version,
@@ -214,9 +224,13 @@ export function cliReleaseTarget(platform: string, arch: string, libc: string): 
 }
 
 function hasAssets(release: Release, target: ReleaseTarget, marker: boolean) {
-  return ["install", "SHA256SUMS", targetAsset(target), ...(marker ? [migrationAsset] : []),
-    ...(target.startsWith("desktop-") ? ["latest-linux.yml"] : [])]
-    .every((name) => release.assets.includes(name))
+  return [
+    "install",
+    "SHA256SUMS",
+    targetAsset(target),
+    ...(marker ? [migrationAsset] : []),
+    ...(target.startsWith("desktop-") ? ["latest-linux.yml"] : []),
+  ].every((name) => release.assets.includes(name))
 }
 
 function maintenance(current: string, releases: Release[]) {
@@ -224,7 +238,32 @@ function maintenance(current: string, releases: Release[]) {
 }
 
 export function isMaintenanceUpdate(current: string, version: string) {
-  return stable(current) && stable(version) && semver.major(current) === semver.major(version) && semver.gt(version, current)
+  return (
+    stable(current) && stable(version) && semver.major(current) === semver.major(version) && semver.gt(version, current)
+  )
+}
+
+export function validateProductionRelease(input: {
+  version: string
+  sourceManifest: string
+  uploadedManifest: string
+  publishedVersions: string[]
+  assets: string[]
+}) {
+  if (input.sourceManifest !== input.uploadedManifest) throw new Error("Uploaded Classic manifest differs from approved source.")
+  const marker = parseMigrationManifest(input.uploadedManifest, input.version)
+  if (!stable(input.version) || semver.major(input.version) !== 2 || marker.sourceMajor !== 1 ||
+      !marker.migrationReady || !marker.freshInstallReady || semver.major(marker.minimumVersion) !== 1 ||
+      !semver.gt(marker.minimumVersion, "1.19.5") || !input.publishedVersions.includes(marker.minimumVersion) ||
+      !marker.supportedUpgradeTargets?.length || !marker.supportedFreshInstallTargets?.length)
+    throw new Error("Classic production requires accepted fresh/migration targets and a published consent-capable bridge newer than 1.19.5.")
+  if (!marker.supportedUpgradeTargets.every((target) => marker.supportedFreshInstallTargets!.includes(target)))
+    throw new Error("Classic migration targets must also be accepted fresh-install targets.")
+  for (const target of [...marker.supportedUpgradeTargets, ...marker.supportedFreshInstallTargets]) {
+    if (!hasAssets({ version: input.version, assets: input.assets }, target, true))
+      throw new Error(`Classic release is missing assets for ${target}.`)
+  }
+  return marker
 }
 
 function stable(version: string) {

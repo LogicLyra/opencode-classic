@@ -10,19 +10,19 @@ NC='\033[0m' # No Color
 
 usage() {
     cat <<EOF
-OpenCode Installer
+OpenCode Classic 1 Installer
 
 Usage: install.sh [options]
 
 Options:
     -h, --help              Display this help message
-    -v, --version <version> Install a specific version (e.g., 1.0.180)
+    -v, --version <version> Install a specific Classic 1 version (e.g., 1.19.5)
     -b, --binary <path>     Install from a local binary instead of downloading
         --no-modify-path    Don't modify shell config files (.zshrc, .bashrc, etc.)
 
 Examples:
     curl -fsSL https://github.com/$REPO/releases/latest/download/install | bash
-    curl -fsSL https://github.com/$REPO/releases/latest/download/install | bash -s -- --version 1.0.180
+    curl -fsSL https://github.com/$REPO/releases/latest/download/install | bash -s -- --version 1.19.5
     ./install --binary /path/to/opencode
 EOF
 }
@@ -33,12 +33,18 @@ binary_path=""
 release_base=""
 download_tmp_dir=""
 staged_binary=""
+staged_receipt=""
+install_lock=""
 
 cleanup() {
     if [[ -n "$staged_binary" ]]; then rm -f -- "$staged_binary"; fi
+    if [[ -n "$staged_receipt" ]]; then rm -f -- "$staged_receipt"; fi
     if [[ -n "$download_tmp_dir" ]]; then rm -rf -- "$download_tmp_dir"; fi
+    if [[ -n "$install_lock" ]]; then rmdir -- "$install_lock" 2>/dev/null || true; fi
 }
-trap cleanup EXIT INT TERM HUP
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM HUP
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -88,6 +94,11 @@ fi
 
 INSTALL_DIR=$HOME/.opencode/bin
 mkdir -p "$INSTALL_DIR"
+if ! mkdir "$INSTALL_DIR/.opencode-install.lock" 2>/dev/null; then
+    printf 'Another Classic installation is running, or a retained install lock needs recovery: %s\n' "$INSTALL_DIR/.opencode-install.lock" >&2
+    exit 1
+fi
+install_lock="$INSTALL_DIR/.opencode-install.lock"
 
 # If --binary is provided, skip all download/detection logic
 if [ -n "$binary_path" ]; then
@@ -183,7 +194,15 @@ else
       target="$target-baseline"
     fi
     if [ "$is_musl" = "true" ]; then
-      target="$target-musl"
+        target="$target-musl"
+    fi
+    if [[ -n "${CLASSIC_INSTALL_TARGET:-}" && "$CLASSIC_INSTALL_TARGET" != "$target" ]]; then
+        conservative="${target/-x64/-x64-baseline}"
+        if [[ "$target" == *baseline* || "$CLASSIC_INSTALL_TARGET" != "$conservative" ]]; then
+            printf 'Requested Classic archive does not match this host: %s\n' "$CLASSIC_INSTALL_TARGET" >&2
+            exit 1
+        fi
+        target="$CLASSIC_INSTALL_TARGET"
     fi
 
     filename="$APP-$target$archive_ext"
@@ -251,19 +270,39 @@ print_message() {
 }
 
 check_version() {
-    if command -v opencode >/dev/null 2>&1; then
-        opencode_path=$(which opencode)
-
-        ## Check the installed version
-        installed_version=$(opencode --version 2>/dev/null || echo "")
+    if [[ -f "$INSTALL_DIR/opencode" ]]; then
+        installed_version=$("$INSTALL_DIR/opencode" --version 2>/dev/null || true)
+        installed_version="${installed_version#opencode v}"
+        installed_version="${installed_version#v}"
+        installed_version="${installed_version//$'\r'/}"
+        if [[ -z "$requested_version" && "$installed_version" =~ ^2\. ]]; then
+            printf 'Classic 2 is installed. Rollback requires an explicit pinned Classic 1 version and the recovery guide.\n' >&2
+            exit 1
+        fi
 
         if [[ "$installed_version" != "$specific_version" ]]; then
             print_message info "${MUTED}Installed version: ${NC}$installed_version."
-        else
+        elif [[ -f "$INSTALL_DIR/.opencode-classic-install.json" && ! -L "$INSTALL_DIR/.opencode-classic-install.json" && \
+                "$(< "$INSTALL_DIR/.opencode-classic-install.json")" == "$(receipt_text "$INSTALL_DIR/opencode")" ]]; then
             print_message info "${MUTED}Version ${NC}$specific_version${MUTED} already installed"
             exit 0
         fi
     fi
+}
+
+receipt_text() {
+    printf '{"schemaVersion":1,"surface":"cli","origin":"release","version":"%s","target":"cli-%s","binarySha256":"%s"}\n' \
+        "$specific_version" "$target" "$(file_sha256 "$1")"
+}
+
+write_receipt() {
+    local binary="$1" actual
+    actual=$("$binary" --version 2>/dev/null) || return 1
+    actual="${actual#opencode v}"; actual="${actual#v}"; actual="${actual//$'\r'/}"
+    [[ "$actual" == "$specific_version" ]] || { printf 'Classic payload version does not match its release\n' >&2; return 1; }
+    staged_receipt=$(mktemp "$INSTALL_DIR/.classic-receipt.XXXXXXXXXX")
+    receipt_text "$binary" > "$staged_receipt"
+    chmod 600 "$staged_receipt"
 }
 
 unbuffered_sed() {
@@ -376,24 +415,25 @@ verify_checksum() {
     local archive="$1"
     local checksums="$2"
     local expected=""
+    local count=0
     local hash name
 
     while read -r hash name; do
         name="${name#\*}"
         if [[ "$name" == "$filename" ]]; then
             expected="$hash"
-            break
+            count=$((count + 1))
         fi
     done < "$checksums"
 
-    if [[ ! "$expected" =~ ^[0-9a-fA-F]{64}$ ]]; then
+    if [[ "$count" != 1 || ! "$expected" =~ ^[0-9a-fA-F]{64}$ ]]; then
         echo -e "${RED}Error: SHA256SUMS does not contain ${filename}${NC}" >&2
         return 1
     fi
 
     local actual
     actual=$(file_sha256 "$archive")
-    if [[ "${actual,,}" != "${expected,,}" ]]; then
+    if [[ "$(printf '%s' "$actual" | tr 'A-F' 'a-f')" != "$(printf '%s' "$expected" | tr 'A-F' 'a-f')" ]]; then
         echo -e "${RED}Error: Checksum verification failed for ${filename}${NC}" >&2
         return 1
     fi
@@ -425,14 +465,21 @@ download_and_install() {
     staged_binary=$(mktemp "$INSTALL_DIR/.opencode.XXXXXXXXXX")
     cp "$download_tmp_dir/opencode" "$staged_binary"
     chmod 755 "$staged_binary"
+    write_receipt "$staged_binary"
     mv -f "$staged_binary" "${INSTALL_DIR}/opencode"
     staged_binary=""
+    mv -f "$staged_receipt" "$INSTALL_DIR/.opencode-classic-install.json"
+    staged_receipt=""
 }
 
 install_from_binary() {
     print_message info "\n${MUTED}Installing ${NC}opencode ${MUTED}from: ${NC}$binary_path"
-    cp "$binary_path" "${INSTALL_DIR}/opencode"
-    chmod 755 "${INSTALL_DIR}/opencode"
+    staged_binary=$(mktemp "$INSTALL_DIR/.opencode.XXXXXXXXXX")
+    cp "$binary_path" "$staged_binary"
+    chmod 755 "$staged_binary"
+    mv -f "$staged_binary" "${INSTALL_DIR}/opencode"
+    staged_binary=""
+    rm -f -- "$INSTALL_DIR/.opencode-classic-install.json"
 }
 
 if [ -n "$binary_path" ]; then
@@ -461,7 +508,7 @@ add_to_path() {
 
 XDG_CONFIG_HOME=${XDG_CONFIG_HOME:-$HOME/.config}
 
-current_shell=$(basename "$SHELL")
+current_shell=$(basename "${SHELL:-/bin/sh}")
 case $current_shell in
     fish)
         config_files="$HOME/.config/fish/config.fish"

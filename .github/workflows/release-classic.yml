@@ -96,7 +96,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ inputs.version }}
-        run: gh release upload "v$VERSION" install --repo "$GITHUB_REPOSITORY"
+        run: gh release upload "v$VERSION" install install-classic --repo "$GITHUB_REPOSITORY"
 
       - name: Install Linux packaging tools
         run: |
@@ -161,6 +161,7 @@ jobs:
           shopt -s nullglob
           files=(
             install
+            install-classic
             packages/opencode/dist/*.zip
             packages/opencode/dist/*.tar.gz
             packages/desktop/dist/*.deb
@@ -183,6 +184,7 @@ jobs:
         with:
           subject-path: |
             install
+            install-classic
             SHA256SUMS
             packages/opencode/dist/*.zip
             packages/opencode/dist/*.tar.gz
@@ -196,7 +198,7 @@ jobs:
           VERSION: ${{ inputs.version }}
         run: |
           assets=$(gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')
-          for required in install SHA256SUMS opencode-linux-x64.tar.gz opencode-linux-x64-baseline.tar.gz opencode-classic-desktop-linux-amd64.deb opencode-classic-desktop-linux-x86_64.rpm latest-linux.yml; do
+          for required in install install-classic SHA256SUMS opencode-linux-x64.tar.gz opencode-linux-x64-baseline.tar.gz opencode-classic-desktop-linux-amd64.deb opencode-classic-desktop-linux-x86_64.rpm latest-linux.yml; do
             if ! grep -Fxq "$required" <<<"$assets"; then
               echo "Missing release asset: $required"
               exit 1

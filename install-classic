@@ -1,0 +1,216 @@
+#!/usr/bin/env bash
+set -euo pipefail
+umask 077
+
+REPO=LogicLyra/opencode-classic
+major=""
+version="${VERSION:-}"
+version="${version#v}"
+choose=false
+no_modify_path=false
+tmp=""
+fail() { printf 'OpenCode Classic: %s\n' "$*" >&2; exit 1; }
+cleanup() { if [[ -n "$tmp" ]]; then rm -rf -- "$tmp"; fi; }
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM HUP
+
+usage() {
+    printf '%s\n' \
+        'OpenCode Classic installation chooser' \
+        'Usage: install-classic [--major 1|2] [--version X.Y.Z] [--choose] [--no-modify-path]' \
+        'Fresh unattended installs default to Classic 1. Owned reinstalls retain their major.' \
+        'V2 requires a verified, accepted fresh-install release for this target.' \
+        'Requires bash, curl, jq, and sha256sum or shasum. Destination: $HOME/.opencode/bin.' \
+        'Existing profiles are preserved; cross-major replacements use the migration/rollback guide.'
+}
+while (( $# )); do
+    case "$1" in
+        -h|--help) usage; exit 0 ;;
+        --major)
+            [[ "${2:-}" == 1 || "${2:-}" == 2 ]] || fail '--major requires 1 or 2'
+            [[ -z "$major" || "$major" == "$2" ]] || fail 'conflicting --major values'
+            major="$2"; shift 2 ;;
+        --version)
+            [[ -n "${2:-}" ]] || fail '--version requires an exact stable version'
+            next="${2#v}"
+            [[ -z "$version" || "$version" == "$next" ]] || fail 'VERSION and --version conflict'
+            version="$next"; shift 2 ;;
+        --choose) choose=true; shift ;;
+        --no-modify-path) no_modify_path=true; shift ;;
+        *) fail "unknown option: $1" ;;
+    esac
+done
+stable='^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
+if [[ -n "$version" ]]; then
+    [[ "$version" =~ $stable ]] || fail 'version must be stable X.Y.Z'
+    requested_major="${version%%.*}"
+    [[ "$requested_major" == 1 || "$requested_major" == 2 ]] || fail 'only Classic 1 and 2 are supported'
+    [[ -z "$major" || "$major" == "$requested_major" ]] || fail '--major and --version conflict'
+    major="$requested_major"
+fi
+if [[ "$choose" == true && -z "$major" ]]; then
+    { exec 3<>/dev/tty; } 2>/dev/null || fail '--choose needs a controlling terminal; supply --major instead'
+fi
+for tool in curl jq; do command -v "$tool" >/dev/null 2>&1 || fail "$tool is required"; done
+if [[ -n "$version" ]]; then
+    jq -ne --arg version "$version" '$version | split(".") | map(tonumber) | all(. <= 9007199254740991)' >/dev/null || fail 'version exceeds stable SemVer limits'
+fi
+hash_file() {
+    if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1" | cut -d ' ' -f1
+    elif command -v shasum >/dev/null 2>&1; then shasum -a 256 "$1" | cut -d ' ' -f1
+    else fail 'sha256sum or shasum is required'; fi
+}
+[[ -d "${TMPDIR:-/tmp}" ]] || fail 'TMPDIR does not exist'
+tmp=$(mktemp -d "${TMPDIR:-/tmp}/classic-choose.XXXXXXXXXX")
+chmod 700 "$tmp"
+download() {
+    local status
+    status=$(curl --silent --show-error --location --proto '=https' --proto-redir '=https' \
+        --output "$2" --write-out '%{http_code}' "$1") || fail 'release download failed'
+    if [[ "$status" == 404 && "${3:-}" == optional ]]; then return 1; fi
+    [[ "$status" == 200 ]] || fail "release request failed (HTTP $status)"
+}
+verify() {
+    local hash name expected="" count=0
+    while read -r hash name; do
+        if [[ "${name#\*}" == "$3" ]]; then expected="$hash"; count=$((count + 1)); fi
+    done < "$2"
+    [[ "$count" == 1 && "$expected" =~ ^[a-fA-F0-9]{64}$ ]] || fail "missing or ambiguous checksum: $3"
+    [[ "$(hash_file "$1")" == "$(printf '%s' "$expected" | tr 'A-F' 'a-f')" ]] || fail "checksum verification failed: $3"
+}
+
+os=$(uname -s)
+arch=$(uname -m)
+case "$arch" in x86_64|amd64) arch=x64 ;; aarch64|arm64) arch=arm64 ;; *) fail "unsupported architecture: $arch" ;; esac
+case "$os" in
+    Linux)
+        os=linux
+        libc=$(ldd --version 2>&1 || true)
+        if [[ "$libc" == *musl* || -f /etc/alpine-release ]]; then musl=-musl
+        elif [[ "$libc" == *GLIBC* || "$libc" == *"GNU libc"* || "$libc" == *"GNU C Library"* ]]; then musl=""
+        else fail 'could not identify Linux libc'; fi ;;
+    Darwin)
+        os=darwin; musl=""
+        if [[ "$arch" == x64 && "$(sysctl -n sysctl.proc_translated 2>/dev/null || true)" == 1 ]]; then arch=arm64; fi ;;
+    MINGW*|MSYS*|CYGWIN*) os=windows; musl="" ;;
+    *) fail "unsupported operating system: $os" ;;
+esac
+[[ "$os-$arch" != windows-arm64 ]] || fail 'Windows arm64 is not a supported installer target'
+target="$os-$arch"
+if [[ "$arch" == x64 ]]; then target="$target-baseline"; fi
+target="$target$musl"
+archive="opencode-$target.zip"
+if [[ "$os" == linux ]]; then archive="opencode-$target.tar.gz"; fi
+
+# Inspect ownership at the intended destination, never a PATH-shadowing executable.
+destination="$HOME/.opencode/bin"
+binary="$destination/opencode"
+receipt="$destination/.opencode-classic-install.json"
+owned_version=""
+if [[ -e "$receipt" ]]; then
+    [[ -f "$receipt" && ! -L "$receipt" ]] || fail 'installation receipt has uncertain ownership'
+    owned_version=$(jq -er 'select(.schemaVersion == 1 and .surface == "cli" and .origin == "release") | .version | select(type == "string")' "$receipt") || fail 'unsupported installation receipt'
+    [[ "$owned_version" =~ $stable ]] || fail 'invalid installed version in receipt'
+fi
+if [[ -e "$binary" || -L "$binary" ]]; then
+    [[ -n "$owned_version" && -f "$binary" && ! -L "$binary" ]] || fail 'existing executable has no verified Classic ownership; use its updater or the recovery guide'
+    expected=$(jq -er '.binarySha256 | select(type == "string" and test("^[a-f0-9]{64}$"))' "$receipt") || fail 'invalid installation receipt hash'
+    [[ "$(hash_file "$binary")" == "$expected" ]] || fail 'installed executable and Classic receipt disagree'
+    actual=$("$binary" --version) || fail 'installed Classic version could not be read'
+    actual="${actual#opencode v}"; actual="${actual#v}"; actual="${actual//$'\r'/}"
+    [[ "$actual" == "$owned_version" ]] || fail 'installed Classic version and receipt disagree'
+fi
+found=$(type -P opencode || true)
+if [[ -n "$found" && "$found" != "$binary" ]]; then
+    fail 'another opencode executable shadows the installation destination; resolve PATH ownership first'
+fi
+
+printf '[]\n' > "$tmp/releases.json"
+page=1
+while :; do
+    download "https://api.github.com/repos/$REPO/releases?per_page=100&page=$page" "$tmp/page.json"
+    jq -e 'type == "array"' "$tmp/page.json" >/dev/null || fail 'invalid release list'
+    jq -s 'add' "$tmp/releases.json" "$tmp/page.json" > "$tmp/combined.json"
+    mv "$tmp/combined.json" "$tmp/releases.json"
+    [[ "$(jq length "$tmp/page.json")" == 100 ]] || break
+    page=$((page + 1))
+done
+jq '[.[] | select(.draft == false and .prerelease == false) | select(.tag_name | type == "string") |
+    select(.tag_name | test("^v[12]\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"))] |
+    unique_by(.tag_name) | sort_by(.tag_name | ltrimstr("v") | split(".") | map(tonumber)) | reverse' \
+    "$tmp/releases.json" > "$tmp/stable.json"
+eligible() {
+    local wanted="$1" candidate base
+    while IFS= read -r candidate; do
+        [[ -z "$version" || "$version" == "$candidate" ]] || continue
+        jq -e --arg tag "v$candidate" --arg archive "$archive" \
+            '.[] | select(.tag_name == $tag) | [.assets[]?.name] as $names | ["install", "SHA256SUMS", $archive] | all(. as $name | $names | index($name) != null)' \
+            "$tmp/stable.json" >/dev/null || continue
+        base="https://github.com/$REPO/releases/download/v$candidate"
+        if [[ "$wanted" == 2 ]]; then
+            download "$base/classic-migration.json" "$tmp/marker.json" optional || continue
+            download "$base/SHA256SUMS" "$tmp/marker-sums"
+            verify "$tmp/marker.json" "$tmp/marker-sums" classic-migration.json
+            jq -e --arg version "$candidate" --arg target "cli-$target" '
+                .schemaVersion == 1 and .version == $version and
+                (.migrationReady | type == "boolean") and (.sourceMajor | type == "number") and
+                (.minimumVersion | type == "string" and test("^[0-9]+\\.[0-9]+\\.[0-9]+$")) and
+                .freshInstallReady == true and (.supportedFreshInstallTargets | type == "array") and
+                (.supportedFreshInstallTargets | index($target) != null)' "$tmp/marker.json" >/dev/null || continue
+        fi
+        printf '%s\n' "$candidate"
+        return
+    done < <(jq -r --arg major "$wanted" '.[] | .tag_name | ltrimstr("v") | select(startswith($major + "."))' "$tmp/stable.json")
+}
+if [[ -z "$major" && "$choose" != true && -n "$owned_version" ]]; then major="${owned_version%%.*}"; fi
+if [[ -z "$major" && "$choose" != true && -t 1 && -t 2 && "${CI:-}" != true ]]; then
+    if { exec 3<>/dev/tty; } 2>/dev/null; then choose=true; fi
+fi
+if [[ -z "$major" && "$choose" == true ]]; then
+    one=$(eligible 1)
+    if two=$(eligible 2); then :; else two='Unavailable — release verification failed'; fi
+    printf 'Choose OpenCode Classic (both retain the classic layout):\n1) Classic 1 — %s\n2) Classic 2 — %s\nSelection [1]: ' \
+        "${one:-unavailable}" "${two:-Coming soon — production acceptance in progress}" >&3
+    IFS= read -r answer <&3 || fail 'no selection received'
+    major="${answer:-1}"
+    [[ "$major" == 1 || "$major" == 2 ]] || fail 'selection must be 1 or 2'
+fi
+major="${major:-1}"
+selected=$(eligible "$major")
+[[ -n "$selected" ]] || fail "Classic $major has no accepted release for cli-$target; no installation was performed"
+if [[ "$major" == 1 ]] && ! jq -ne --arg version "$selected" '($version | split(".") | map(tonumber)) >= [1,19,5]' >/dev/null; then
+    fail 'older v1 targets require the verified current bridge installer and the pinned recovery procedure'
+fi
+
+if [[ -n "$owned_version" && "${owned_version%%.*}" != "$major" ]]; then
+    fail 'cross-major replacement requires explicit migration or rollback: https://github.com/LogicLyra/opencode-classic/blob/main/MIGRATING.md'
+fi
+if [[ -n "$owned_version" ]] && ! jq -ne --arg installed "$owned_version" --arg selected "$selected" \
+    '($selected | split(".") | map(tonumber)) >= ($installed | split(".") | map(tonumber))' >/dev/null; then
+    fail 'an older pinned executable requires the explicit profile recovery/rollback procedure'
+fi
+legacy=false
+for root in "${XDG_DATA_HOME:-$HOME/.local/share}/opencode" "${XDG_CONFIG_HOME:-$HOME/.config}/opencode" "${XDG_STATE_HOME:-$HOME/.local/state}/opencode"; do
+    if [[ -e "$root" || -L "$root" ]]; then legacy=true; fi
+done
+if [[ "$legacy" == true && ( "$major" == 2 || -z "$owned_version" ) ]]; then
+    fail 'retained v1/shared upstream profile detected; use the protected migration/recovery path rather than a fresh install'
+fi
+profile="$HOME/.opencode/classic-v2"
+if [[ -e "$profile" || -L "$profile" ]]; then
+    [[ "$major" == 2 && -d "$profile" && ! -L "$profile" ]] || fail 'retained Classic 2 profile requires explicit recovery or rollback'
+    [[ -f "$profile/classic-profile.json" && ! -L "$profile/classic-profile.json" ]] || fail 'retained Classic 2 profile has no supported ownership record'
+    jq -e --arg version "$selected" 'select(.schemaVersion == 1 and .owner == "LogicLyra/opencode-classic" and .major == 2) |
+        (.version | split(".") | map(tonumber)) <= ($version | split(".") | map(tonumber))' \
+        "$profile/classic-profile.json" >/dev/null || fail 'unknown or newer retained Classic 2 profile; installation stopped'
+fi
+
+base="https://github.com/$REPO/releases/download/v$selected"
+download "$base/install" "$tmp/install"
+download "$base/SHA256SUMS" "$tmp/SHA256SUMS"
+verify "$tmp/install" "$tmp/SHA256SUMS" install
+args=(--version "$selected")
+if [[ "$no_modify_path" == true ]]; then args+=(--no-modify-path); fi
+# The delegated installer may select this baseline variant only after checking host compatibility.
+VERSION="$selected" CLASSIC_INSTALL_TARGET="$target" bash "$tmp/install" "${args[@]}"

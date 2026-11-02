@@ -136,6 +136,9 @@ or deleting a migration journal.
 
 ### Installation
 
+Choose a release line before installation: **Classic 1 is supported; Classic 2
+is coming soon.** See [version choices and installation/recovery details](INSTALLING.md).
+
 ```bash
 curl -fsSL https://github.com/LogicLyra/opencode-classic/releases/latest/download/install | bash
 ```
@@ -157,18 +160,10 @@ Maintainers can reproduce the complete build, package, installed-deb, and visual
 
 #### Installation Directory
 
-The install script respects the following priority order for the installation path:
-
-1. `$OPENCODE_INSTALL_DIR` - Custom installation directory
-2. `$XDG_BIN_DIR` - XDG Base Directory Specification compliant path
-3. `$HOME/bin` - Standard user binary directory (if it exists or can be created)
-4. `$HOME/.opencode/bin` - Default fallback
-
-```bash
-# Examples
-OPENCODE_INSTALL_DIR=/usr/local/bin curl -fsSL https://github.com/LogicLyra/opencode-classic/releases/latest/download/install | bash
-XDG_BIN_DIR=$HOME/.local/bin curl -fsSL https://github.com/LogicLyra/opencode-classic/releases/latest/download/install | bash
-```
+The Classic installer uses `$HOME/.opencode/bin`. `OPENCODE_INSTALL_DIR`,
+`XDG_BIN_DIR` and `$HOME/bin` do not override this destination. Use
+`--no-modify-path` to keep shell startup files unchanged. Installation receipts,
+reinstalls and rollback are described in [INSTALLING.md](INSTALLING.md).
 
 ### Agents
 
