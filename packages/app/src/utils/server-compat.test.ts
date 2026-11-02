@@ -4,7 +4,10 @@ import { createCompatibleApi } from "./server-compat"
 
 function setup(
   protocol: "v1" | "v2" | Promise<"v1" | "v2">,
-  responses?: { vcs?: { branch: string; default_branch: string } },
+  responses?: {
+    vcs?: { branch: string; default_branch: string }
+    location?: { directory: string; project: { id: string; directory: string; canonical: string } }
+  },
 ) {
   const requests: Request[] = []
   const fetcher = Object.assign(
@@ -37,6 +40,8 @@ function setup(
       }
       if (request.method === "GET" && new URL(request.url).pathname === "/vcs")
         return Response.json(responses?.vcs ?? {})
+      if (request.method === "GET" && new URL(request.url).pathname === "/api/location")
+        return Response.json(responses?.location)
       if (request.method === "GET") return Response.json([])
       return new Response(undefined, { status: 204 })
     },
@@ -53,6 +58,25 @@ function setup(
 }
 
 describe("createCompatibleApi", () => {
+  test.each([
+    { name: "explicit worktree", input: { location: { directory: "/checkout" } }, directory: "/checkout" },
+    { name: "directory SDK default", input: undefined, directory: "/repo" },
+  ])("resolves the current V2 project from the $name location", async (item) => {
+    const { api, requests } = setup("v2", {
+      location: {
+        directory: item.directory,
+        project: { id: "project_main", directory: "/canonical-project", canonical: "/canonical-project" },
+      },
+    })
+
+    expect(await api.project.current(item.input)).toEqual({ id: "project_main", directory: "/canonical-project" })
+    expect(requests).toHaveLength(1)
+    const url = new URL(requests[0]!.url)
+    expect(url.pathname).toBe("/api/location")
+    expect(url.searchParams.get("location[directory]")).toBe(item.directory)
+    expect(requests[0]!.method).toBe("GET")
+  })
+
   /*
   test("routes V1 archive through the legacy session update", async () => {
     const { api, requests } = setup("v1")
