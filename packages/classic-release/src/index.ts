@@ -250,13 +250,24 @@ export function validateProductionRelease(input: {
   publishedVersions: string[]
   assets: string[]
 }) {
-  if (input.sourceManifest !== input.uploadedManifest) throw new Error("Uploaded Classic manifest differs from approved source.")
+  if (input.sourceManifest !== input.uploadedManifest)
+    throw new Error("Uploaded Classic manifest differs from approved source.")
   const marker = parseMigrationManifest(input.uploadedManifest, input.version)
-  if (!stable(input.version) || semver.major(input.version) !== 2 || marker.sourceMajor !== 1 ||
-      !marker.migrationReady || !marker.freshInstallReady || semver.major(marker.minimumVersion) !== 1 ||
-      !semver.gt(marker.minimumVersion, "1.19.5") || !input.publishedVersions.includes(marker.minimumVersion) ||
-      !marker.supportedUpgradeTargets?.length || !marker.supportedFreshInstallTargets?.length)
-    throw new Error("Classic production requires accepted fresh/migration targets and a published consent-capable bridge newer than 1.19.5.")
+  if (
+    !stable(input.version) ||
+    semver.major(input.version) !== 2 ||
+    marker.sourceMajor !== 1 ||
+    !marker.migrationReady ||
+    !marker.freshInstallReady ||
+    semver.major(marker.minimumVersion) !== 1 ||
+    !semver.gt(marker.minimumVersion, "1.19.5") ||
+    !input.publishedVersions.includes(marker.minimumVersion) ||
+    !marker.supportedUpgradeTargets?.length ||
+    !marker.supportedFreshInstallTargets?.length
+  )
+    throw new Error(
+      "Classic production requires accepted fresh/migration targets and a published consent-capable bridge newer than 1.19.5.",
+    )
   if (!marker.supportedUpgradeTargets.every((target) => marker.supportedFreshInstallTargets!.includes(target)))
     throw new Error("Classic migration targets must also be accepted fresh-install targets.")
   for (const target of [...marker.supportedUpgradeTargets, ...marker.supportedFreshInstallTargets]) {

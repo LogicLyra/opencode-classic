@@ -189,7 +189,10 @@ export function ClassicUpgradeAnnouncement() {
           label: language.t("classicUpgrade.review"),
           onClick: () => {
             dismissToast(id)
-            void migration?.review(state.offer.version).then(() => dialog.show(() => <DialogClassicUpgrade />)).catch(() => showToast({ title: language.t("common.requestFailed") }))
+            void migration
+              ?.review(state.offer.version)
+              .then(() => dialog.show(() => <DialogClassicUpgrade />))
+              .catch(() => showToast({ title: language.t("common.requestFailed") }))
           },
         },
         {

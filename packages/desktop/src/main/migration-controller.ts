@@ -143,7 +143,7 @@ export function createMigrationController(input: {
       preference =
         choice === "stay"
           ? { stay: true, snoozeUntil: 0 }
-        : { stay: false, snoozeUntil: Date.now() + 7 * 24 * 60 * 60 * 1000 }
+          : { stay: false, snoozeUntil: Date.now() + 7 * 24 * 60 * 60 * 1000 }
       await input.persistence.set(preference)
       release?.()
       release = undefined

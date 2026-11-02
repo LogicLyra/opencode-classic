@@ -3,10 +3,10 @@
 Both supported release lines retain the classic layout. The application version
 is independent of a connected server's version or a saved layout preference.
 
-| Choice | Availability | Desktop downloads |
-| --- | --- | --- |
-| **Classic 1** | Supported; current stable release **1.19.5** | [Linux x64 deb](https://github.com/LogicLyra/opencode-classic/releases/download/v1.19.5/opencode-classic-desktop-linux-amd64.deb) · [Linux x64 rpm](https://github.com/LogicLyra/opencode-classic/releases/download/v1.19.5/opencode-classic-desktop-linux-x86_64.rpm) |
-| **Classic 2** | **Coming soon — production acceptance in progress** | Installation and migration become available after classic UI, profile recovery, security and native-package acceptance |
+| Choice        | Availability                                        | Desktop downloads                                                                                                                                                                                                                                                      |
+| ------------- | --------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Classic 1** | Supported; current stable release **1.19.5**        | [Linux x64 deb](https://github.com/LogicLyra/opencode-classic/releases/download/v1.19.5/opencode-classic-desktop-linux-amd64.deb) · [Linux x64 rpm](https://github.com/LogicLyra/opencode-classic/releases/download/v1.19.5/opencode-classic-desktop-linux-x86_64.rpm) |
+| **Classic 2** | **Coming soon — production acceptance in progress** | Installation and migration become available after classic UI, profile recovery, security and native-package acceptance                                                                                                                                                 |
 
 Only one Classic desktop generation is installed at a time: the two lines share
 their package and application identity. A separately installed CLI can use a

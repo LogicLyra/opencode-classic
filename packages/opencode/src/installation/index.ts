@@ -10,7 +10,13 @@ import { AppProcess } from "@opencode-ai/core/process"
 import path from "path"
 import { makeRuntime } from "@opencode-ai/core/effect/runtime"
 import semver from "semver"
-import { checksumMatches, cliReleaseTarget, createReleaseClient, instructions, type ReleaseTarget } from "@opencode-classic/releases"
+import {
+  checksumMatches,
+  cliReleaseTarget,
+  createReleaseClient,
+  instructions,
+  type ReleaseTarget,
+} from "@opencode-classic/releases"
 import { InstallationChannel, InstallationVersion } from "@opencode-ai/core/installation/version"
 import { InstallationEvent } from "@opencode-ai/schema/installation-event"
 

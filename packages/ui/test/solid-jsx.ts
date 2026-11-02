@@ -6,7 +6,9 @@ import { plugin } from "bun"
 const transpiler = new Bun.Transpiler({
   loader: "tsx",
   trimUnusedImports: true,
-  tsconfig: { compilerOptions: { jsx: "react", jsxFactory: "__solidTestH", jsxFragmentFactory: "__solidTestFragment" } },
+  tsconfig: {
+    compilerOptions: { jsx: "react", jsxFactory: "__solidTestH", jsxFragmentFactory: "__solidTestFragment" },
+  },
 })
 
 plugin({

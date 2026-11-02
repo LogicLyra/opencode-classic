@@ -1,6 +1,14 @@
 import { describe, expect, test } from "bun:test"
 import { createHash } from "node:crypto"
-import { checksumMatches, createReleaseClient, downloadBase, migrationAsset, targetAsset, validateProductionRelease, type Request } from "."
+import {
+  checksumMatches,
+  createReleaseClient,
+  downloadBase,
+  migrationAsset,
+  targetAsset,
+  validateProductionRelease,
+  type Request,
+} from "."
 
 const release = (version: string, extra = {}) => ({
   tag_name: `v${version}`,
@@ -59,19 +67,32 @@ describe("Classic release coexistence", () => {
     { marker: { supportedFreshInstallTargets: ["desktop-linux-x64-deb"] }, accepted: false },
   ])("publisher verifies real bridge/readiness/target contracts: %j", (input) => {
     const body = manifest(input.marker)
-    const validate = () => validateProductionRelease({
-      version: "2.2.5", sourceManifest: body, uploadedManifest: body,
-      publishedVersions: ["1.19.5", "1.20.0"],
-      assets: release("2.2.5").assets.map((asset) => asset.name),
-    })
+    const validate = () =>
+      validateProductionRelease({
+        version: "2.2.5",
+        sourceManifest: body,
+        uploadedManifest: body,
+        publishedVersions: ["1.19.5", "1.20.0"],
+        assets: release("2.2.5").assets.map((asset) => asset.name),
+      })
     if (input.accepted) expect(validate().minimumVersion).toBe("1.20.0")
     else expect(validate).toThrow()
   })
 
   test("publisher rejects altered uploaded metadata and unsupported advertised payloads", () => {
-    const input = { version: "2.2.5", sourceManifest: manifest(), uploadedManifest: manifest(), publishedVersions: ["1.20.0"], assets: release("2.2.5").assets.map((asset) => asset.name) }
-    expect(() => validateProductionRelease({ ...input, uploadedManifest: `${input.uploadedManifest}\n` })).toThrow("approved source")
-    expect(() => validateProductionRelease({ ...input, assets: input.assets.filter((name) => !name.endsWith(".deb")) })).toThrow("missing assets")
+    const input = {
+      version: "2.2.5",
+      sourceManifest: manifest(),
+      uploadedManifest: manifest(),
+      publishedVersions: ["1.20.0"],
+      assets: release("2.2.5").assets.map((asset) => asset.name),
+    }
+    expect(() => validateProductionRelease({ ...input, uploadedManifest: `${input.uploadedManifest}\n` })).toThrow(
+      "approved source",
+    )
+    expect(() =>
+      validateProductionRelease({ ...input, assets: input.assets.filter((name) => !name.endsWith(".deb")) }),
+    ).toThrow("missing assets")
   })
   test.each([
     { current: "1.19.3", marker: undefined, expected: "1.19.5" },
