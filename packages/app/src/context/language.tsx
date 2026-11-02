@@ -6,6 +6,7 @@ import { pluralCategory, type UiI18nPluralKey } from "@opencode-ai/ui/context/i1
 import { Persist, persisted } from "@/utils/persist"
 import { dict as en } from "@/i18n/en"
 import { chatImportEnglish } from "@/i18n/chat-import"
+import { classicUpgradeEnglish } from "@/i18n/classic-upgrade"
 import { chatImportLoaders } from "@/i18n/chat-import/loaders"
 import { dict as uiEn } from "@opencode-ai/ui/i18n/en"
 import {
@@ -28,7 +29,7 @@ function localeDirection(locale: Locale): Direction {
   return RTL_LOCALES.has(locale) ? "rtl" : "ltr"
 }
 
-type RawDictionary = typeof en & typeof uiEn & typeof chatImportEnglish
+type RawDictionary = typeof en & typeof uiEn & typeof chatImportEnglish & typeof classicUpgradeEnglish
 type Dictionary = i18n.Flatten<RawDictionary>
 type PluralKey =
   | UiI18nPluralKey
@@ -45,7 +46,7 @@ const LOCALES: readonly Locale[] = DESKTOP_NATIVE_LOCALES
 
 const INTL = DESKTOP_NATIVE_LOCALE_TAGS
 
-const base = i18n.flatten({ ...chatImportEnglish, ...en, ...uiEn })
+const base = i18n.flatten({ ...classicUpgradeEnglish, ...chatImportEnglish, ...en, ...uiEn })
 const dicts = new Map<Locale, Dictionary>([["en", base]])
 
 const merge = (app: Promise<Source>, ui: Promise<Source>) =>

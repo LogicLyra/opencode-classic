@@ -39,6 +39,7 @@ export function createMigrationController(input: {
     canPrepare: !!input.preflight,
   })
   const fail = async (code: Extract<MigrationState, { status: "error" }>["code"]) => {
+    if (code === "changed") offer = undefined
     release?.()
     release = undefined
     const failed = transition({ status: "error", code })
@@ -68,9 +69,13 @@ export function createMigrationController(input: {
         preference = stored
       } catch {
         if (observed !== revision) return state
+        offer = undefined
         return transition({ status: "error", code: "verification" })
       }
-      if (discovery.status === "error") return transition({ status: "error", code: "verification" })
+      if (discovery.status === "error") {
+        offer = undefined
+        return transition({ status: "error", code: "verification" })
+      }
       if (discovery.status === "unavailable") {
         offer = undefined
         return transition({ status: "unavailable" })

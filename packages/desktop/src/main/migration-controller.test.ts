@@ -189,8 +189,9 @@ test.each(["prepare", "install"])(
     expect(app.calls).not.toContain("stop")
     expect(app.calls).not.toContain("install")
     if (phase === "prepare") expect(app.calls.some((call) => call.startsWith("feed:"))).toBe(false)
-    expect(app.stored.prepared).toBeUndefined()
-    expect(app.maintenance.reserveMigration()).toBeFunction()
+  expect(app.stored.prepared).toBeUndefined()
+  expect(app.maintenance.reserveMigration()).toBeFunction()
+  await expect(app.controller.review("2.2.5")).rejects.toThrow("INVALID_MIGRATION_TARGET")
   },
 )
 

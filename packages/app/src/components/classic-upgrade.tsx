@@ -1,4 +1,4 @@
-import { Show, createEffect } from "solid-js"
+import { Show, createEffect, onCleanup } from "solid-js"
 import { createStore } from "solid-js/store"
 import { Button } from "@opencode-ai/ui/button"
 import { Dialog } from "@opencode-ai/ui/dialog"
@@ -125,7 +125,7 @@ export function DialogClassicUpgrade() {
         <p class="text-14-regular">{language.t("classicUpgrade.recovery")}</p>
         <p class="text-14-regular">{language.t("classicUpgrade.rollback")}</p>
         <p class="text-12-regular text-text-weak">{language.t("classicUpgrade.capture")}</p>
-        <Show when={!canPrepare()}>
+        <Show when={offer() && !canPrepare()}>
           <p role="status" class="text-14-regular">
             {language.t("classicUpgrade.preflightUnavailable")}
           </p>
@@ -189,18 +189,19 @@ export function ClassicUpgradeAnnouncement() {
           label: language.t("classicUpgrade.review"),
           onClick: () => {
             dismissToast(id)
-            void migration?.review(state.offer.version).then(() => dialog.show(() => <DialogClassicUpgrade />))
+            void migration?.review(state.offer.version).then(() => dialog.show(() => <DialogClassicUpgrade />)).catch(() => showToast({ title: language.t("common.requestFailed") }))
           },
         },
         {
           label: language.t("classicUpgrade.later"),
           onClick: () => {
             dismissToast(id)
-            void migration?.dismiss("later")
+            void migration?.dismiss("later").catch(() => showToast({ title: language.t("common.requestFailed") }))
           },
         },
       ],
     })
+    onCleanup(() => dismissToast(id))
   })
   return null
 }

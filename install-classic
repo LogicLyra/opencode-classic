@@ -108,7 +108,7 @@ destination="$HOME/.opencode/bin"
 binary="$destination/opencode"
 receipt="$destination/.opencode-classic-install.json"
 owned_version=""
-if [[ -e "$receipt" ]]; then
+if [[ -e "$receipt" || -L "$receipt" ]]; then
     [[ -f "$receipt" && ! -L "$receipt" ]] || fail 'installation receipt has uncertain ownership'
     owned_version=$(jq -er 'select(.schemaVersion == 1 and .surface == "cli" and .origin == "release") | .version | select(type == "string")' "$receipt") || fail 'unsupported installation receipt'
     [[ "$owned_version" =~ $stable ]] || fail 'invalid installed version in receipt'

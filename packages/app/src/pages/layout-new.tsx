@@ -5,6 +5,7 @@ import { TabsInfoPopup } from "@/components/help-button"
 import { Titlebar, type TitlebarUpdate } from "@/components/titlebar"
 import { usePlatform } from "@/context/platform"
 import { setV2Toast, ToastRegion } from "@/utils/toast"
+import { ClassicUpgradeAnnouncement } from "@/components/classic-upgrade"
 
 export default function NewLayout(props: ParentProps) {
   const platform = usePlatform()
@@ -30,6 +31,7 @@ export default function NewLayout(props: ParentProps) {
         "padding-bottom": "env(safe-area-inset-bottom, 0px)",
       }}
     >
+      <ClassicUpgradeAnnouncement />
       <Titlebar
         update={update}
         debugTools={
