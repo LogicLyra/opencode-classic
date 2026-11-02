@@ -36,9 +36,9 @@ test("upgrade English fallback interpolates without replacing existing Arabic tr
   const dispose = render(() => createComponent(PlatformProvider, {
     value: platform,
     get children() {
-      return createComponent(LanguageProvider, {
+      return () => createComponent(LanguageProvider, {
         locale: "ar",
-        get children() { return createComponent(Observe, {}) },
+        get children() { return () => createComponent(Observe, {}) },
       })
     },
   }), host)

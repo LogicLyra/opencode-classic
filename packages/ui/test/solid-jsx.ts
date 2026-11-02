@@ -1,19 +1,19 @@
 import { plugin } from "bun"
 
-// Bun transpiles TSX against the tsconfig `jsxImportSource`, but `solid-js/jsx-runtime` has no runtime
-// exports because Solid's compiler normally replaces JSX. Tests run without that compiler, so compile
-// JSX against Solid's hyperscript runtime instead.
+// Solid's production compiler replaces JSX. Tests use hyperscript instead; Bun 1.4's
+// standalone Transpiler omits the synthetic imports for automatic JSX, so bind the
+// classic factory explicitly rather than leaving generated jsx_* names unresolved.
 const transpiler = new Bun.Transpiler({
   loader: "tsx",
   trimUnusedImports: true,
-  tsconfig: { compilerOptions: { jsx: "react-jsx", jsxImportSource: "solid-js/h" } },
+  tsconfig: { compilerOptions: { jsx: "react", jsxFactory: "__solidTestH", jsxFragmentFactory: "__solidTestFragment" } },
 })
 
 plugin({
   name: "solid-jsx-runtime",
   setup(build) {
     build.onLoad({ filter: /\.[jt]sx$/ }, async (args) => ({
-      contents: transpiler.transformSync(await Bun.file(args.path).text()),
+      contents: `import __solidTestH from "solid-js/h";\nconst __solidTestFragment = (props) => props.children;\n${transpiler.transformSync(await Bun.file(args.path).text())}`,
       loader: "js",
     }))
   },

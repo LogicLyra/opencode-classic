@@ -21,7 +21,7 @@ usage() {
         'Usage: install-classic [--major 1|2] [--version X.Y.Z] [--choose] [--no-modify-path]' \
         'Fresh unattended installs default to Classic 1. Owned reinstalls retain their major.' \
         'V2 requires a verified, accepted fresh-install release for this target.' \
-        'Requires bash, curl, jq, and sha256sum or shasum. Destination: $HOME/.opencode/bin.' \
+        "Requires bash, curl, jq, and sha256sum or shasum. Destination: \$HOME/.opencode/bin." \
         'Existing profiles are preserved; cross-major replacements use the migration/rollback guide.'
 }
 while (( $# )); do
