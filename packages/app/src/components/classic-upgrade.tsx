@@ -51,7 +51,16 @@ export function ClassicUpgradeCard() {
         </p>
         <MigrationError />
         <div class="flex flex-wrap gap-2">
-          <Button ref={(element: HTMLButtonElement) => { trigger = element }} size="small" variant="secondary" aria-busy={store.busy} aria-disabled={store.busy} onClick={run}>
+          <Button
+            ref={(element: HTMLButtonElement) => {
+              trigger = element
+            }}
+            size="small"
+            variant="secondary"
+            aria-busy={store.busy}
+            aria-disabled={store.busy}
+            onClick={run}
+          >
             {language.t(offer() ? "classicUpgrade.review" : "classicUpgrade.check")}
           </Button>
         </div>
@@ -110,11 +119,15 @@ export function DialogClassicUpgrade(props: { restoreFocus?: () => void } = {}) 
       dialog.close()
     })
   return (
-    <Dialog title={language.t("classicUpgrade.title")} fit onCloseAutoFocus={(event) => {
-      if (!props.restoreFocus) return
-      event.preventDefault()
-      props.restoreFocus()
-    }}>
+    <Dialog
+      title={language.t("classicUpgrade.title")}
+      fit
+      onCloseAutoFocus={(event) => {
+        if (!props.restoreFocus) return
+        event.preventDefault()
+        props.restoreFocus()
+      }}
+    >
       <div class="flex flex-col gap-4 px-6 pb-6 max-h-[70vh] overflow-y-auto" data-scrollable>
         <p class="text-14-regular">{language.t("classicUpgrade.source", { version: platform.version ?? "" })}</p>
         <Show when={offer()}>
