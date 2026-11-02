@@ -44,7 +44,7 @@ export function ClassicUpgradeCard() {
         aria-label={language.t("classicUpgrade.title")}
       >
         <h4 class="text-14-medium text-text-strong">{language.t("classicUpgrade.title")}</h4>
-        <p class="text-12-regular text-text-weak">
+        <p class="text-12-regular text-text-base">
           {offer()
             ? language.t("classicUpgrade.available", { version: offer()!.version })
             : language.t("classicUpgrade.development")}
@@ -70,7 +70,7 @@ function MigrationError() {
   return (
     <Show when={error()}>
       {(state) => (
-        <p role="status" class="text-12-regular text-text-weak">
+        <p role="status" class="text-12-regular text-text-base">
           {language.t(`classicUpgrade.error.${state().code}`)}
         </p>
       )}
@@ -130,7 +130,7 @@ export function DialogClassicUpgrade(props: { restoreFocus?: () => void } = {}) 
         </Show>
         <p class="text-14-regular">{language.t("classicUpgrade.recovery")}</p>
         <p class="text-14-regular">{language.t("classicUpgrade.rollback")}</p>
-        <p class="text-12-regular text-text-weak">{language.t("classicUpgrade.capture")}</p>
+        <p class="text-12-regular text-text-base">{language.t("classicUpgrade.capture")}</p>
         <Show when={offer() && !canPrepare()}>
           <p role="status" class="text-14-regular">
             {language.t("classicUpgrade.preflightUnavailable")}
@@ -143,7 +143,7 @@ export function DialogClassicUpgrade(props: { restoreFocus?: () => void } = {}) 
         </Show>
         <MigrationError />
         <div class="flex flex-wrap justify-end gap-2">
-          <Button variant="ghost" disabled={busy()} onClick={() => dismiss("stay")}>
+          <Button variant="secondary" disabled={busy()} onClick={() => dismiss("stay")}>
             {language.t("classicUpgrade.stay")}
           </Button>
           <Button variant="ghost" disabled={busy()} onClick={() => dismiss("later")}>
