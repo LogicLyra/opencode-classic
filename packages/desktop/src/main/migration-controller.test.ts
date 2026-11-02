@@ -7,7 +7,7 @@ import { createMigrationController, type MigrationPreference } from "./migration
 
 afterEach(() => setSystemTime())
 
-async function fixture(input: { maintenance?: boolean; preflight?: false; wait?: Promise<void> } = {}) {
+async function fixture(input: { maintenance?: boolean; preflight?: false; wait?: Promise<void>; readPreference?: () => Promise<MigrationPreference | undefined> } = {}) {
   const calls: string[] = []
   const stored = { preference: undefined as MigrationPreference | undefined, prepared: undefined as string | undefined }
   let published = true
@@ -81,7 +81,7 @@ async function fixture(input: { maintenance?: boolean; preflight?: false; wait?:
         return releases.migrationOffer("1.20.0", "desktop-linux-x64-deb", version)
       },
       persistence: {
-        get: () => stored.preference,
+        get: () => input.readPreference ? input.readPreference() : stored.preference,
         set: (value) => {
           stored.preference = value
         },
@@ -116,6 +116,21 @@ async function fixture(input: { maintenance?: boolean; preflight?: false; wait?:
     },
   }
 }
+
+test.each(["resolve", "reject"])("an obsolete preference read cannot overwrite prepared consent: %s", async (outcome) => {
+  const gate = Promise.withResolvers<MigrationPreference | undefined>()
+  let reads = 0
+  const app = await fixture({ readPreference: () => ++reads === 1 ? Promise.resolve(undefined) : gate.promise })
+  await app.controller.review("2.2.5")
+  const checking = app.controller.refresh(app.discovery)
+  await app.controller.prepare("2.2.5")
+  if (outcome === "reject") gate.reject(new Error("preference read failed"))
+  else gate.resolve({ stay: true, snoozeUntil: 0 })
+  await checking
+  expect(app.controller.getState().status).toBe("prepared")
+  expect(app.stored.prepared).toBe("2.2.5")
+  expect(app.maintenance.reserveMigration()).toBeUndefined()
+})
 
 test("offers and review are metadata-only; exact explicit prepare and restart own the transfer", async () => {
   const app = await fixture()
@@ -202,7 +217,13 @@ test.each(["later", "stay"] as const)(
     await next.review("2.2.5")
     expect(next.getState().status).toBe("reviewing")
     await app.maintenance.check()
-    expect(app.maintenance.getState()).toEqual({ status: "ready", version: "1.20.1" })
+  expect(app.maintenance.getState()).toEqual({ status: "ready", version: "1.20.1" })
+  if (choice === "stay") {
+    await next.dismiss("later")
+    setSystemTime(new Date("2026-11-18T00:00:00Z"))
+    await next.refresh(app.discovery)
+    expect(next.getState()).toMatchObject({ status: "offered", announce: true })
+  }
   },
 )
 

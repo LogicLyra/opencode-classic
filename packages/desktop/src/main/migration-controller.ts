@@ -67,6 +67,7 @@ export function createMigrationController(input: {
         if (observed !== revision) return state
         preference = stored
       } catch {
+        if (observed !== revision) return state
         return transition({ status: "error", code: "verification" })
       }
       if (discovery.status === "error") return transition({ status: "error", code: "verification" })

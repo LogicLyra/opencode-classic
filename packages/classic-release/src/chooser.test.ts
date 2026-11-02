@@ -55,7 +55,7 @@ if [[ "$status" == true ]]; then printf 200; fi
     await chmod(executable, 0o755)
     if (input.existing.startsWith("owned")) await Bun.write(path.join(home, ".opencode/bin/.opencode-classic-install.json"), JSON.stringify({ schemaVersion: 1, surface: "cli", origin: "release", version, binarySha256: hash(body), target: "cli-linux-x64-baseline" }))
   }
-  const run = async (args: string[] = [], env: Record<string, string> = {}, piped = false) => {
+  const run = async (args: readonly string[] = [], env: Record<string, string> = {}, piped = false) => {
     const child = Bun.spawn(piped ? ["bash", "-s", "--", ...args] : ["setsid", "bash", chooser, ...args], {
       env: { HOME: home, PATH: `${bin}:/usr/bin:/bin`, SHELL: "/bin/bash", FIXTURE: root, CI: "true", ...env },
       stdin: piped ? Bun.file(chooser) : "ignore", stdout: "pipe", stderr: "pipe",
