@@ -71,10 +71,10 @@ describe("createCompatibleApi", () => {
 
     expect(await api.project.current(item.input)).toEqual({ id: "project_main", directory: "/canonical-project" })
     expect(requests).toHaveLength(1)
-    const url = new URL(requests[0]!.url)
+    const url = new URL(requests[0].url)
     expect(url.pathname).toBe("/api/location")
     expect(url.searchParams.get("location[directory]")).toBe(item.directory)
-    expect(requests[0]!.method).toBe("GET")
+    expect(requests[0].method).toBe("GET")
   })
 
   /*
