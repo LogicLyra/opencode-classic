@@ -85,10 +85,27 @@ function sessionInfo(session: Session): SessionInfo {
 
 export function createCompatibleApi(input: CompatibleInput): CompatibleApi {
   const v1 = createV1Api(input)
+  const v2 = createV2Api(input)
   return lazyApi(
-    input.protocol.then((protocol) => (protocol === "v1" ? v1 : input.current)),
+    input.protocol.then((protocol) => (protocol === "v1" ? v1 : v2)),
     input.current,
   )
+}
+
+function createV2Api(input: CompatibleInput): CompatibleApi {
+  return {
+    ...input.current,
+    project: {
+      ...input.current.project,
+      async current(value?: Parameters<ServerApi["project"]["current"]>[0]) {
+        // Current v2 exposes project identity through location, not /api/project/current.
+        const location = await input.current.location.get({
+          location: { ...value?.location, directory: value?.location?.directory ?? input.directory },
+        })
+        return { id: location.project.id, directory: location.project.directory }
+      },
+    },
+  }
 }
 
 function lazyApi<T extends object>(implementation: Promise<T>, shape: T): T {
