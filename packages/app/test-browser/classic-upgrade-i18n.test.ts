@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test"
 import { render } from "solid-js/web"
-import { createEffect } from "solid-js"
+import { createComponent, createEffect } from "solid-js"
 import { LanguageProvider, loadLocaleDict, useLanguage } from "../src/context/language"
 import { PlatformProvider, type Platform } from "../src/context/platform"
 import { dict } from "../src/i18n/ar"
@@ -33,7 +33,15 @@ test("upgrade English fallback interpolates without replacing existing Arabic tr
     return null
   }
   const host = document.createElement("div")
-  const dispose = render(() => <PlatformProvider value={platform}><LanguageProvider locale="ar"><Observe /></LanguageProvider></PlatformProvider>, host)
+  const dispose = render(() => createComponent(PlatformProvider, {
+    value: platform,
+    get children() {
+      return createComponent(LanguageProvider, {
+        locale: "ar",
+        get children() { return createComponent(Observe, {}) },
+      })
+    },
+  }), host)
   try {
     await ready.promise
     expect(seen.review).toBe("Review upgrade")
