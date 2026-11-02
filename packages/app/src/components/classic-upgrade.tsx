@@ -51,7 +51,7 @@ export function ClassicUpgradeCard() {
         </p>
         <MigrationError />
         <div class="flex flex-wrap gap-2">
-          <Button ref={(element) => { trigger = element }} size="small" variant="secondary" aria-busy={store.busy} aria-disabled={store.busy} onClick={run}>
+          <Button ref={(element: HTMLButtonElement) => { trigger = element }} size="small" variant="secondary" aria-busy={store.busy} aria-disabled={store.busy} onClick={run}>
             {language.t(offer() ? "classicUpgrade.review" : "classicUpgrade.check")}
           </Button>
         </div>
