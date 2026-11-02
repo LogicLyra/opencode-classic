@@ -122,19 +122,25 @@ describe("updater controller", () => {
     expect(app.controller.reserveMigration()).toBeUndefined()
   })
 
-  test.each(["2.0.0", "0.9.0", "invalid"])("maintenance refuses a backend target %s before downloading", async (version) => {
-    const calls: string[] = []
-    const controller = createUpdaterController({
-      enabled: true, currentVersion: "1.0.0",
-      backend: {
-        checkForUpdates: async () => ({ isUpdateAvailable: true, updateInfo: { version } }),
-        downloadUpdate: async () => { calls.push("download") },
-        quitAndInstall() {},
-      },
-      persistence: { get: () => undefined, set() {}, clear() {} },
-      stop: async () => {},
-    })
-    expect((await controller.check()).status).toBe("error")
-    expect(calls).toEqual([])
-  })
+  test.each(["2.0.0", "0.9.0", "invalid"])(
+    "maintenance refuses a backend target %s before downloading",
+    async (version) => {
+      const calls: string[] = []
+      const controller = createUpdaterController({
+        enabled: true,
+        currentVersion: "1.0.0",
+        backend: {
+          checkForUpdates: async () => ({ isUpdateAvailable: true, updateInfo: { version } }),
+          downloadUpdate: async () => {
+            calls.push("download")
+          },
+          quitAndInstall() {},
+        },
+        persistence: { get: () => undefined, set() {}, clear() {} },
+        stop: async () => {},
+      })
+      expect((await controller.check()).status).toBe("error")
+      expect(calls).toEqual([])
+    },
+  )
 })

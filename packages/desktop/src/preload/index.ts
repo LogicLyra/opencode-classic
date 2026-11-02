@@ -29,7 +29,11 @@ function stateSubscription<State>(channel: string, subscribe: string, unsubscrib
 }
 
 const subscribeUpdater = stateSubscription<UpdaterState>("updater-state", "updater-subscribe", "updater-unsubscribe")
-const subscribeMigration = stateSubscription<MigrationState>("migration-state", "migration-subscribe", "migration-unsubscribe")
+const subscribeMigration = stateSubscription<MigrationState>(
+  "migration-state",
+  "migration-subscribe",
+  "migration-unsubscribe",
+)
 
 const api: ElectronAPI = {
   chatImport: {

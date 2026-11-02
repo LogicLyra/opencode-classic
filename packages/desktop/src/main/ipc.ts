@@ -174,10 +174,13 @@ export function registerIpcHandlers(deps: Deps) {
   handleTrusted("updater-install", () => deps.updater.install())
   handleTrusted("migration-subscribe", (event) => {
     const id = event.sender.id
-    migrationSubscriptions.set(id, deps.updater.migration.subscribe((state) => {
-      if (event.sender.isDestroyed()) return migrationSubscriptions.delete(id)
-      event.sender.send("migration-state", state)
-    }))
+    migrationSubscriptions.set(
+      id,
+      deps.updater.migration.subscribe((state) => {
+        if (event.sender.isDestroyed()) return migrationSubscriptions.delete(id)
+        event.sender.send("migration-state", state)
+      }),
+    )
     event.sender.once("destroyed", () => migrationSubscriptions.delete(id))
   })
   handleTrusted("migration-unsubscribe", (event) => migrationSubscriptions.delete(event.sender.id))

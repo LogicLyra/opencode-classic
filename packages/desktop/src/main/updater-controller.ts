@@ -70,9 +70,12 @@ export function createUpdaterController(input: {
   return {
     getState: () => state,
     reserveMigration() {
-      if (!input.enabled || migrationReserved || pending || state.status === "ready" || state.status === "installing") return
+      if (!input.enabled || migrationReserved || pending || state.status === "ready" || state.status === "installing")
+        return
       migrationReserved = true
-      return () => { migrationReserved = false }
+      return () => {
+        migrationReserved = false
+      }
     },
     subscribe(listener: (state: UpdaterState) => void) {
       listeners.add(listener)

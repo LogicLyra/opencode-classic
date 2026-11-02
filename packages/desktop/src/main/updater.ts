@@ -32,9 +32,14 @@ export function setupAutoUpdater(stop: () => Promise<void>) {
   const store = getStore("opencode.updater")
   const current = app.getVersion()
   const releases = createReleaseClient()
-  const target: ReleaseTarget | undefined = process.platform !== "linux" || process.arch !== "x64" ? undefined
-    : autoUpdater instanceof pkg.DebUpdater ? "desktop-linux-x64-deb"
-    : autoUpdater instanceof pkg.RpmUpdater ? "desktop-linux-x64-rpm" : undefined
+  const target: ReleaseTarget | undefined =
+    process.platform !== "linux" || process.arch !== "x64"
+      ? undefined
+      : autoUpdater instanceof pkg.DebUpdater
+        ? "desktop-linux-x64-deb"
+        : autoUpdater instanceof pkg.RpmUpdater
+          ? "desktop-linux-x64-rpm"
+          : undefined
   let snapshot: ReturnType<typeof releases.discover> | undefined
   const backend = {
     checkForUpdates: async () => {
@@ -72,17 +77,26 @@ export function setupAutoUpdater(stop: () => Promise<void>) {
   const migration = createMigrationController({
     enabled: UPDATER_ENABLED && !!target,
     maintenance: controller,
-    revalidate: (version) => target ? releases.migrationOffer(current, target, version) : Promise.resolve(undefined),
+    revalidate: (version) => (target ? releases.migrationOffer(current, target, version) : Promise.resolve(undefined)),
     backend,
     persistence: {
       get() {
         const value = store.get("migration-major-2")
-        if (!value || typeof value !== "object" || !("stay" in value) || typeof value.stay !== "boolean" ||
-            !("snoozeUntil" in value) || typeof value.snoozeUntil !== "number" || !Number.isFinite(value.snoozeUntil)) return
+        if (
+          !value ||
+          typeof value !== "object" ||
+          !("stay" in value) ||
+          typeof value.stay !== "boolean" ||
+          !("snoozeUntil" in value) ||
+          typeof value.snoozeUntil !== "number" ||
+          !Number.isFinite(value.snoozeUntil)
+        )
+          return
         return { stay: value.stay, snoozeUntil: value.snoozeUntil }
       },
       set: (value) => store.set("migration-major-2", value),
-      prepared: (version) => version ? store.set("migration-consent", { version, target }) : store.delete("migration-consent"),
+      prepared: (version) =>
+        version ? store.set("migration-consent", { version, target }) : store.delete("migration-consent"),
     },
     // Preparation stays disabled until the staged-profile owner implements both phases.
     stop,
@@ -94,8 +108,16 @@ export function setupAutoUpdater(stop: () => Promise<void>) {
     snapshot = releases.discover(current, target)
     checking = Promise.all([
       start ? controller.start() : controller.check(),
-      snapshot.then((result) => migration.refresh(result.migration), () => migration.refresh({ status: "error", code: "verification" })),
-    ]).then(([state]) => state).finally(() => { snapshot = undefined; checking = undefined })
+      snapshot.then(
+        (result) => migration.refresh(result.migration),
+        () => migration.refresh({ status: "error", code: "verification" }),
+      ),
+    ])
+      .then(([state]) => state)
+      .finally(() => {
+        snapshot = undefined
+        checking = undefined
+      })
     return checking
   }
   return {
@@ -106,7 +128,10 @@ export function setupAutoUpdater(stop: () => Promise<void>) {
       ...migration,
       async check() {
         if (!UPDATER_ENABLED || !target) return migration.getState()
-        if (checking) { await checking; return migration.getState() }
+        if (checking) {
+          await checking
+          return migration.getState()
+        }
         return releases.discover(current, target).then(
           (result) => migration.refresh(result.migration),
           () => migration.refresh({ status: "error", code: "verification" }),

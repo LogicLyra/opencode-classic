@@ -23,9 +23,11 @@ export function createMigrationController(input: {
   let preference: MigrationPreference = { stay: false, snoozeUntil: 0 }
   let pending: Promise<MigrationState> | undefined
   let release: (() => void) | undefined
+  let revision = 0
   const listeners = new Set<(state: MigrationState) => void>()
 
   const transition = (next: MigrationState) => {
+    revision++
     state = next
     listeners.forEach((listener) => listener(state))
     return state
@@ -40,7 +42,9 @@ export function createMigrationController(input: {
     release?.()
     release = undefined
     const failed = transition({ status: "error", code })
-    await Promise.resolve().then(() => input.persistence.prepared(undefined)).catch(() => undefined)
+    await Promise.resolve()
+      .then(() => input.persistence.prepared(undefined))
+      .catch(() => undefined)
     return failed
   }
   const requireTarget = (version: unknown) => {
@@ -57,8 +61,11 @@ export function createMigrationController(input: {
     },
     async refresh(discovery: MigrationDiscovery) {
       if (!input.enabled || pending || state.status === "prepared" || state.status === "installing") return state
+      const observed = ++revision
       try {
-        preference = (await input.persistence.get()) ?? { stay: false, snoozeUntil: 0 }
+        const stored = (await input.persistence.get()) ?? { stay: false, snoozeUntil: 0 }
+        if (observed !== revision) return state
+        preference = stored
       } catch {
         return transition({ status: "error", code: "verification" })
       }
@@ -86,14 +93,19 @@ export function createMigrationController(input: {
       transition(available("preparing"))
       pending = (async () => {
         const fresh = await input.revalidate(selected.version)
-        if (!fresh || fresh.target !== selected.target || fresh.minimumVersion !== selected.minimumVersion) return fail("changed")
+        if (!fresh || fresh.target !== selected.target || fresh.minimumVersion !== selected.minimumVersion)
+          return fail("changed")
         if (!(await input.preflight!(selected, "prepare"))) return fail("preflight")
         const result = await input.backend.checkTarget(selected.version)
         if (!result?.isUpdateAvailable || result.updateInfo?.version !== selected.version) return fail("changed")
         await input.backend.downloadUpdate()
         await input.persistence.prepared(selected.version)
         return transition(available("prepared"))
-      })().catch(() => fail("download")).finally(() => { pending = undefined })
+      })()
+        .catch(() => fail("download"))
+        .finally(() => {
+          pending = undefined
+        })
       return pending
     },
     async install(version: unknown) {
@@ -121,9 +133,11 @@ export function createMigrationController(input: {
     async dismiss(choice: unknown) {
       if (choice !== "later" && choice !== "stay") throw new Error("INVALID_MIGRATION_PREFERENCE")
       if (pending || state.status === "installing") throw new Error("MIGRATION_IN_PROGRESS")
-      preference = choice === "stay"
-        ? { stay: true, snoozeUntil: 0 }
-        : { ...preference, snoozeUntil: Date.now() + 7 * 24 * 60 * 60 * 1000 }
+      revision++
+      preference =
+        choice === "stay"
+          ? { stay: true, snoozeUntil: 0 }
+        : { stay: false, snoozeUntil: Date.now() + 7 * 24 * 60 * 60 * 1000 }
       await input.persistence.set(preference)
       release?.()
       release = undefined
