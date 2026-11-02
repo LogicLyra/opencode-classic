@@ -1,4 +1,5 @@
 import type { UpdaterState } from "@opencode-ai/app/updater"
+import { isMaintenanceUpdate } from "@opencode-classic/releases"
 
 export type { UpdaterState } from "@opencode-ai/app/updater"
 
@@ -26,6 +27,7 @@ export function createUpdaterController(input: {
 }) {
   let state: UpdaterState = input.enabled ? { status: "idle" } : { status: "disabled" }
   let pending: Promise<UpdaterState> | undefined
+  let migrationReserved = false
   const listeners = new Set<(state: UpdaterState) => void>()
 
   const transition = (next: UpdaterState) => {
@@ -37,6 +39,7 @@ export function createUpdaterController(input: {
 
   const check = () => {
     if (!input.enabled) return Promise.resolve(state)
+    if (migrationReserved) return Promise.resolve(state)
     if (state.status === "ready") return Promise.resolve(state)
     if (pending) return pending
 
@@ -48,6 +51,7 @@ export function createUpdaterController(input: {
         await input.persistence.clear()
         return transition({ status: "up-to-date" })
       }
+      if (!isMaintenanceUpdate(input.currentVersion, version)) throw new Error("CLASSIC_MAINTENANCE_TARGET_MISMATCH")
 
       transition({ status: "downloading", version })
       await input.backend.downloadUpdate()
@@ -65,6 +69,11 @@ export function createUpdaterController(input: {
 
   return {
     getState: () => state,
+    reserveMigration() {
+      if (!input.enabled || migrationReserved || pending || state.status === "ready" || state.status === "installing") return
+      migrationReserved = true
+      return () => { migrationReserved = false }
+    },
     subscribe(listener: (state: UpdaterState) => void) {
       listeners.add(listener)
       listener(state)

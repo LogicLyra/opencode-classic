@@ -1,14 +1,35 @@
 import { contextBridge, ipcRenderer, webUtils } from "electron"
 import type { ElectronAPI, WslServersEvent } from "./types"
-import type { UpdaterState } from "@opencode-ai/app/updater"
+import type { UpdaterState, MigrationState } from "@opencode-ai/app/updater"
 
-const updaterCallbacks = new Set<(state: UpdaterState) => void>()
-let updaterState: UpdaterState | undefined
-let updaterSubscription: Promise<void> | undefined
-const updaterHandler = (_: unknown, state: UpdaterState) => {
-  updaterState = state
-  updaterCallbacks.forEach((callback) => callback(state))
+function stateSubscription<State>(channel: string, subscribe: string, unsubscribe: string) {
+  const callbacks = new Set<(state: State) => void>()
+  let current: State | undefined
+  let pending: Promise<void> | undefined
+  const handler = (_: unknown, state: State) => {
+    current = state
+    callbacks.forEach((callback) => callback(state))
+  }
+  return async (callback: (state: State) => void) => {
+    callbacks.add(callback)
+    if (current) callback(current)
+    if (!pending) {
+      ipcRenderer.on(channel, handler)
+      pending = ipcRenderer.invoke(subscribe)
+    }
+    await pending
+    return () => {
+      callbacks.delete(callback)
+      if (callbacks.size > 0) return
+      ipcRenderer.removeListener(channel, handler)
+      pending = undefined
+      void ipcRenderer.invoke(unsubscribe)
+    }
+  }
 }
+
+const subscribeUpdater = stateSubscription<UpdaterState>("updater-state", "updater-subscribe", "updater-unsubscribe")
+const subscribeMigration = stateSubscription<MigrationState>("migration-state", "migration-subscribe", "migration-unsubscribe")
 
 const api: ElectronAPI = {
   chatImport: {
@@ -46,24 +67,17 @@ const api: ElectronAPI = {
     startServer: (id) => ipcRenderer.invoke("wsl-servers-start", id),
   },
   updater: {
-    subscribe: async (cb) => {
-      updaterCallbacks.add(cb)
-      if (updaterState) cb(updaterState)
-      if (!updaterSubscription) {
-        ipcRenderer.on("updater-state", updaterHandler)
-        updaterSubscription = ipcRenderer.invoke("updater-subscribe")
-      }
-      await updaterSubscription
-      return () => {
-        updaterCallbacks.delete(cb)
-        if (updaterCallbacks.size > 0) return
-        ipcRenderer.removeListener("updater-state", updaterHandler)
-        updaterSubscription = undefined
-        void ipcRenderer.invoke("updater-unsubscribe")
-      }
-    },
+    subscribe: subscribeUpdater,
     check: () => ipcRenderer.invoke("updater-check"),
     install: () => ipcRenderer.invoke("updater-install"),
+    migration: {
+      subscribe: subscribeMigration,
+      check: () => ipcRenderer.invoke("migration-check"),
+      review: (version) => ipcRenderer.invoke("migration-review", version),
+      prepare: (version) => ipcRenderer.invoke("migration-prepare", version),
+      install: (version) => ipcRenderer.invoke("migration-install", version),
+      dismiss: (choice) => ipcRenderer.invoke("migration-dismiss", choice),
+    },
   },
   consumeInitialDeepLinks: () => ipcRenderer.invoke("consume-initial-deep-links"),
   getDefaultServerUrl: () => ipcRenderer.invoke("get-default-server-url"),

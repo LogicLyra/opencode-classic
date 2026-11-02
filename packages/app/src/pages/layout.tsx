@@ -1,3 +1,4 @@
+import { ClassicUpgradeAnnouncement } from "@/components/classic-upgrade"
 import {
   createEffect,
   createMemo,
@@ -2247,6 +2248,7 @@ export default function LegacyLayout(props: ParentProps) {
 
   return (
     <div class="relative bg-background-base flex-1 min-h-0 min-w-0 flex flex-col select-none [&_input]:select-text [&_textarea]:select-text [&_[contenteditable]]:select-text">
+      <ClassicUpgradeAnnouncement />
       {autoselecting() ?? ""}
       <Titlebar
         update={titlebarUpdate}

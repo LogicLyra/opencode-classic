@@ -8,6 +8,7 @@ import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { useLanguage } from "@/context/language"
 import { usePlatform } from "@/context/platform"
 import { useUpdaterAction } from "../updater-action"
+import { ClassicUpgradeCard } from "../classic-upgrade"
 import { useSettings } from "@/context/settings"
 import { ExternalLink } from "../external-link"
 import { SettingsListV2 } from "./parts/list"
@@ -512,6 +513,7 @@ export const SettingsGeneralV2: Component<{
           </ButtonV2>
         </SettingsRowV2>
       </SettingsListV2>
+      <ClassicUpgradeCard />
     </div>
   )
 

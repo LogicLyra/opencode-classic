@@ -20,7 +20,7 @@ import {
   setTitlebar,
   updateTitlebar,
 } from "./windows"
-import type { UpdaterController } from "./updater-controller"
+import type { setupAutoUpdater } from "./updater"
 import { createUpdaterSubscriptions } from "./updater-subscriptions"
 import { createDesktopDraftStore } from "./draft-store"
 import { nativeT } from "./native-translations"
@@ -49,7 +49,7 @@ type Deps = {
   setDisplayBackend: (backend: string | null) => Promise<void> | void
   checkAppExists: (appName: string) => Promise<boolean> | boolean
   resolveAppPath: (appName: string) => Promise<string | null>
-  updater: UpdaterController
+  updater: ReturnType<typeof setupAutoUpdater>
   showUpdater: () => Promise<void> | void
   setBackgroundColor: (color: string) => void
   exportDebugLogs: () => Promise<string>
@@ -133,7 +133,9 @@ export function registerIpcHandlers(deps: Deps) {
   })
   const drafts = createDesktopDraftStore(join(app.getPath("userData"), "drafts.sqlite"))
   const updaterSubscriptions = createUpdaterSubscriptions()
+  const migrationSubscriptions = createUpdaterSubscriptions()
   app.once("will-quit", updaterSubscriptions.clear)
+  app.once("will-quit", migrationSubscriptions.clear)
   app.on("before-quit", () => drafts.flush())
   app.once("will-quit", () => drafts.close())
   app.on("browser-window-created", (_event, win) => win.on("session-end", () => drafts.flush()))
@@ -170,6 +172,20 @@ export function registerIpcHandlers(deps: Deps) {
   handleTrusted("updater-unsubscribe", (event) => updaterSubscriptions.delete(event.sender.id))
   handleTrusted("updater-check", () => deps.updater.check())
   handleTrusted("updater-install", () => deps.updater.install())
+  handleTrusted("migration-subscribe", (event) => {
+    const id = event.sender.id
+    migrationSubscriptions.set(id, deps.updater.migration.subscribe((state) => {
+      if (event.sender.isDestroyed()) return migrationSubscriptions.delete(id)
+      event.sender.send("migration-state", state)
+    }))
+    event.sender.once("destroyed", () => migrationSubscriptions.delete(id))
+  })
+  handleTrusted("migration-unsubscribe", (event) => migrationSubscriptions.delete(event.sender.id))
+  handleTrusted("migration-check", () => deps.updater.migration.check())
+  handleTrusted("migration-review", (_event, version: unknown) => deps.updater.migration.review(version))
+  handleTrusted("migration-prepare", (_event, version: unknown) => deps.updater.migration.prepare(version))
+  handleTrusted("migration-install", (_event, version: unknown) => deps.updater.migration.install(version))
+  handleTrusted("migration-dismiss", (_event, choice: unknown) => deps.updater.migration.dismiss(choice))
   handleTrusted("set-background-color", (_event: IpcMainInvokeEvent, color: string) => deps.setBackgroundColor(color))
   handleTrusted("export-debug-logs", () => deps.exportDebugLogs())
   handleTrusted("set-force-focus", (event: IpcMainInvokeEvent, enabled: boolean) =>

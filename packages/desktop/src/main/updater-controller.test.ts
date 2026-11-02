@@ -6,7 +6,7 @@ function setup(input?: { currentVersion?: string; ready?: UpdaterReadyRecord }) 
   const backend: UpdaterBackend = {
     async checkForUpdates() {
       calls.push("check")
-      return { isUpdateAvailable: true, updateInfo: { version: "2.0.0" } }
+      return { isUpdateAvailable: true, updateInfo: { version: "1.1.0" } }
     },
     async downloadUpdate() {
       calls.push("download")
@@ -45,22 +45,22 @@ describe("updater controller", () => {
     await app.controller.start()
 
     expect(app.calls).toEqual(["check", "download"])
-    expect(app.getReady()).toEqual({ version: "2.0.0" })
+    expect(app.getReady()).toEqual({ version: "1.1.0" })
     expect(states.map((state) => state.status)).toEqual(["idle", "checking", "downloading", "ready"])
-    expect(app.controller.getState()).toEqual({ status: "ready", version: "2.0.0" })
+    expect(app.controller.getState()).toEqual({ status: "ready", version: "1.1.0" })
   })
 
   test("revalidates a persisted target through the updater cache on launch", async () => {
-    const app = setup({ ready: { version: "2.0.0" } })
+    const app = setup({ ready: { version: "1.1.0" } })
 
     await app.controller.start()
 
     expect(app.calls).toEqual(["check", "download"])
-    expect(app.controller.getState()).toEqual({ status: "ready", version: "2.0.0" })
+    expect(app.controller.getState()).toEqual({ status: "ready", version: "1.1.0" })
   })
 
   test("clears a target already installed before checking", async () => {
-    const app = setup({ currentVersion: "2.0.0", ready: { version: "2.0.0" } })
+    const app = setup({ currentVersion: "1.1.0", ready: { version: "1.1.0" } })
 
     await app.controller.start()
 
@@ -83,7 +83,7 @@ describe("updater controller", () => {
     await app.controller.install()
 
     expect(app.calls).toEqual(["check", "download", "stop", "install"])
-    expect(app.controller.getState()).toEqual({ status: "ready", version: "2.0.0" })
+    expect(app.controller.getState()).toEqual({ status: "ready", version: "1.1.0" })
   })
 
   test("returns to ready when installation cannot start", async () => {
@@ -94,7 +94,7 @@ describe("updater controller", () => {
       enabled: true,
       currentVersion: "1.0.0",
       backend: {
-        checkForUpdates: async () => ({ isUpdateAvailable: true, updateInfo: { version: "2.0.0" } }),
+        checkForUpdates: async () => ({ isUpdateAvailable: true, updateInfo: { version: "1.1.0" } }),
         downloadUpdate: async () => {},
         quitAndInstall() {},
       },
@@ -106,6 +106,35 @@ describe("updater controller", () => {
     await failed.start()
 
     await expect(failed.install()).rejects.toThrow("stop failed")
-    expect(failed.getState()).toEqual({ status: "ready", version: "2.0.0" })
+    expect(failed.getState()).toEqual({ status: "ready", version: "1.1.0" })
+  })
+
+  test("reserves updater ownership before any migration I/O and releases it after cancellation", async () => {
+    const app = setup()
+    const release = app.controller.reserveMigration()
+    expect(release).toBeFunction()
+    expect(app.controller.reserveMigration()).toBeUndefined()
+    await app.controller.check()
+    expect(app.calls).toEqual([])
+    release!()
+    await app.controller.check()
+    expect(app.calls).toEqual(["check", "download"])
+    expect(app.controller.reserveMigration()).toBeUndefined()
+  })
+
+  test.each(["2.0.0", "0.9.0", "invalid"])("maintenance refuses a backend target %s before downloading", async (version) => {
+    const calls: string[] = []
+    const controller = createUpdaterController({
+      enabled: true, currentVersion: "1.0.0",
+      backend: {
+        checkForUpdates: async () => ({ isUpdateAvailable: true, updateInfo: { version } }),
+        downloadUpdate: async () => { calls.push("download") },
+        quitAndInstall() {},
+      },
+      persistence: { get: () => undefined, set() {}, clear() {} },
+      stop: async () => {},
+    })
+    expect((await controller.check()).status).toBe("error")
+    expect(calls).toEqual([])
   })
 })

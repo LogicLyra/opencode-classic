@@ -15,7 +15,7 @@ import {
   useWslServers,
   useLanguage,
 } from "@opencode-ai/app"
-import type { UpdaterState } from "@opencode-ai/app/updater"
+import type { UpdaterState, MigrationState } from "@opencode-ai/app/updater"
 import * as Sentry from "@sentry/solid"
 import type { AsyncStorage } from "@solid-primitives/storage"
 import { createMemoryHistory, MemoryRouter, type BaseRouterProps } from "@solidjs/router"
@@ -65,6 +65,8 @@ if (import.meta.env.VITE_SENTRY_DSN) {
 
 const [updaterState, setUpdaterState] = createSignal<UpdaterState>({ status: "disabled" })
 void window.api.updater.subscribe(setUpdaterState)
+const [migrationState, setMigrationState] = createSignal<MigrationState>({ status: "disabled" })
+void window.api.updater.migration.subscribe(setMigrationState)
 
 const deepLinkEvent = "opencode:deep-link"
 
@@ -242,6 +244,14 @@ const createPlatform = (windowState: DesktopWindowState): Platform => {
       state: updaterState,
       check: () => window.api.updater.check(),
       install: () => window.api.updater.install(),
+      migration: {
+        state: migrationState,
+        check: () => window.api.updater.migration.check(),
+        review: (version) => window.api.updater.migration.review(version),
+        prepare: (version) => window.api.updater.migration.prepare(version),
+        install: (version) => window.api.updater.migration.install(version),
+        dismiss: (choice) => window.api.updater.migration.dismiss(choice),
+      },
     },
 
     exportDebugLogs: () => window.api.exportDebugLogs(),

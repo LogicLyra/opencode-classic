@@ -14,4 +14,31 @@ export type UpdaterPlatform = {
   state: Accessor<UpdaterState>
   check(): Promise<UpdaterState>
   install(): Promise<void>
+  migration?: MigrationPlatform
+}
+
+export type MigrationOffer = {
+  version: string
+  minimumVersion: string
+  target: string
+  releaseUrl: string
+}
+
+export type MigrationState =
+  | { status: "disabled" | "unavailable" | "checking" }
+  | {
+      status: "offered" | "reviewing" | "preparing" | "prepared" | "installing"
+      offer: MigrationOffer
+      announce: boolean
+      canPrepare: boolean
+    }
+  | { status: "error"; code: "verification" | "maintenance" | "changed" | "preflight" | "download" | "install" }
+
+export type MigrationPlatform = {
+  state: Accessor<MigrationState>
+  check(): Promise<MigrationState>
+  review(version: string): Promise<MigrationState>
+  prepare(version: string): Promise<MigrationState>
+  install(version: string): Promise<void>
+  dismiss(choice: "later" | "stay"): Promise<MigrationState>
 }
