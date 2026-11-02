@@ -12,6 +12,7 @@ export interface DialogProps extends ParentProps {
   classList?: ComponentProps<"div">["classList"]
   fit?: boolean
   transition?: boolean
+  onCloseAutoFocus?: ComponentProps<typeof Kobalte.Content>["onCloseAutoFocus"]
 }
 
 export function Dialog(props: DialogProps) {
@@ -27,6 +28,7 @@ export function Dialog(props: DialogProps) {
         <Kobalte.Content
           data-slot="dialog-content"
           data-no-header={!props.title && !props.action ? "" : undefined}
+          onCloseAutoFocus={props.onCloseAutoFocus}
           classList={{
             ...props.classList,
             [props.class ?? ""]: !!props.class,

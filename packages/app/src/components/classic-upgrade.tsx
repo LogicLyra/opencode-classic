@@ -18,11 +18,12 @@ export function ClassicUpgradeCard() {
     return current && "offer" in current ? current.offer : undefined
   }
   const [store, setStore] = createStore({ busy: false })
+  let trigger: HTMLButtonElement | undefined
   const review = async () => {
     const selected = offer()
     if (!selected) return
     await platform.updater?.migration?.review(selected.version)
-    dialog.show(() => <DialogClassicUpgrade />)
+    dialog.push(() => <DialogClassicUpgrade restoreFocus={() => trigger?.focus()} />)
   }
   const run = async () => {
     if (store.busy) return
@@ -50,7 +51,7 @@ export function ClassicUpgradeCard() {
         </p>
         <MigrationError />
         <div class="flex flex-wrap gap-2">
-          <Button size="small" variant="secondary" aria-busy={store.busy} aria-disabled={store.busy} onClick={run}>
+          <Button ref={(element) => { trigger = element }} size="small" variant="secondary" aria-busy={store.busy} aria-disabled={store.busy} onClick={run}>
             {language.t(offer() ? "classicUpgrade.review" : "classicUpgrade.check")}
           </Button>
         </div>
@@ -77,7 +78,7 @@ function MigrationError() {
   )
 }
 
-export function DialogClassicUpgrade() {
+export function DialogClassicUpgrade(props: { restoreFocus?: () => void } = {}) {
   const platform = usePlatform()
   const language = useLanguage()
   const dialog = useDialog()
@@ -109,7 +110,11 @@ export function DialogClassicUpgrade() {
       dialog.close()
     })
   return (
-    <Dialog title={language.t("classicUpgrade.title")} fit>
+    <Dialog title={language.t("classicUpgrade.title")} fit onCloseAutoFocus={(event) => {
+      if (!props.restoreFocus) return
+      event.preventDefault()
+      props.restoreFocus()
+    }}>
       <div class="flex flex-col gap-4 px-6 pb-6 max-h-[70vh] overflow-y-auto" data-scrollable>
         <p class="text-14-regular">{language.t("classicUpgrade.source", { version: platform.version ?? "" })}</p>
         <Show when={offer()}>
